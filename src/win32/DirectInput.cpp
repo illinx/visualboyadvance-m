@@ -125,6 +125,12 @@ void winReadKeys()
     winReadKey("Speed", i, theApp.input->joypaddata[JOYPAD(i,KEY_BUTTON_SPEED)]);
     winReadKey("Capture", i, theApp.input->joypaddata[JOYPAD(i,KEY_BUTTON_CAPTURE)]);
     winReadKey("GS", i, theApp.input->joypaddata[JOYPAD(i,KEY_BUTTON_GS)]);
+    winReadKey("P2_Left", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_LEFT)]);
+    winReadKey("P2_Right", i, theApp.input->joypaddata[JOYPAD(i, KEY_P2_RIGHT)]);
+    winReadKey("P2_Up", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_UP)]);
+    winReadKey("P2_Down", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_DOWN)]);
+    winReadKey("P2_A", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_A)]);
+    winReadKey("P2_B", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_B)]);
   }
   winReadKey("Motion_Left", theApp.input->joypaddata[MOTION(KEY_LEFT)]);
   winReadKey("Motion_Right", theApp.input->joypaddata[MOTION(KEY_RIGHT)]);
@@ -172,6 +178,12 @@ void winSaveKeys()
     winSaveKey("R", i, theApp.input->joypaddata[JOYPAD(i,KEY_BUTTON_R)]);
     winSaveKey("Start", i, theApp.input->joypaddata[JOYPAD(i,KEY_BUTTON_START)]);
     winSaveKey("Select", i, theApp.input->joypaddata[JOYPAD(i,KEY_BUTTON_SELECT)]);
+    winSaveKey("P2_Left", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_LEFT)]);
+    winSaveKey("P2_Right", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_RIGHT)]);
+    winSaveKey("P2_Up", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_UP)]);
+    winSaveKey("P2_Down", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_DOWN)]);
+    winSaveKey("P2_A", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_A)]);
+    winSaveKey("P2_B", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_B)]);
   }
   regSetDwordValue("joyVersion", 1);
 

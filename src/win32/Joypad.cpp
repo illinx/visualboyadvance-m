@@ -125,6 +125,12 @@ void JoypadConfig::DoDataExchange(CDataExchange* pDX)
   DDX_Control(pDX, IDC_EDIT_BUTTON_GS, buttonGS);
   DDX_Control(pDX, IDC_EDIT_BUTTON_B, buttonB);
   DDX_Control(pDX, IDC_EDIT_BUTTON_A, buttonA);
+  DDX_Control(pDX, IDC_EDIT_P2_UP, P2_up);
+  DDX_Control(pDX, IDC_EDIT_P2_RIGHT, P2_right);
+  DDX_Control(pDX, IDC_EDIT_P2_LEFT, P2_left);
+  DDX_Control(pDX, IDC_EDIT_P2_DOWN, P2_down);
+  DDX_Control(pDX, IDC_EDIT_P2_BUTTON_B, P2_buttonB);
+  DDX_Control(pDX, IDC_EDIT_P2_BUTTON_A, P2_buttonA);
   //}}AFX_DATA_MAP
 }
 
@@ -207,6 +213,12 @@ BOOL JoypadConfig::OnInitDialog()
   CopyKeys(buttonGS.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_GS)]);
   CopyKeys(buttonB.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_B)]);
   CopyKeys(buttonA.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_A)]);
+  CopyKeys(P2_up.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_UP)]);
+  CopyKeys(P2_right.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_RIGHT)]);
+  CopyKeys(P2_left.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_LEFT)]);
+  CopyKeys(P2_down.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_DOWN)]);
+  CopyKeys(P2_buttonB.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_B)]);
+  CopyKeys(P2_buttonA.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_A)]);
 
   up.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_UP)]));
   down.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_DOWN)]));
@@ -221,6 +233,12 @@ BOOL JoypadConfig::OnInitDialog()
   speed.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_SPEED)]));
   capture.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_CAPTURE)]));
   buttonGS.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_GS)]));
+  P2_up.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_P2_UP)]));
+  P2_down.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_P2_DOWN)]));
+  P2_left.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_P2_LEFT)]));
+  P2_right.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_P2_RIGHT)]));
+  P2_buttonA.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_A)]));
+  P2_buttonB.SetWindowText(GetKeyListName(theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_B)]));
 
   CenterWindow();
 
@@ -270,6 +288,24 @@ void JoypadConfig::assignKey(int id, LONG_PTR key)
   case IDC_EDIT_BUTTON_GS:
     AssignKey(theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_GS)],key);
     break;
+  case IDC_EDIT_P2_LEFT:
+      AssignKey(theApp.input->joypaddata[JOYPAD(which,KEY_P2_LEFT)],key);
+      break;
+  case IDC_EDIT_P2_RIGHT:
+      AssignKey(theApp.input->joypaddata[JOYPAD(which,KEY_P2_RIGHT)],key);
+      break;
+  case IDC_EDIT_P2_UP:
+      AssignKey(theApp.input->joypaddata[JOYPAD(which,KEY_P2_UP)],key);
+      break;
+  case IDC_EDIT_P2_DOWN:
+      AssignKey(theApp.input->joypaddata[JOYPAD(which,KEY_P2_DOWN)],key);
+      break;
+  case IDC_EDIT_P2_BUTTON_A:
+      AssignKey(theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_A)],key);
+      break;
+  case IDC_EDIT_P2_BUTTON_B:
+      AssignKey(theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_B)],key);
+      break;
   }
 }
 

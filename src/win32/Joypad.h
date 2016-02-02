@@ -70,6 +70,12 @@ class JoypadConfig : public CDialog
   JoypadEditControl  buttonGS;
   JoypadEditControl  buttonB;
   JoypadEditControl  buttonA;
+  JoypadEditControl  P2_up;
+  JoypadEditControl  P2_right;
+  JoypadEditControl  P2_left;
+  JoypadEditControl  P2_down;
+  JoypadEditControl  P2_buttonB;
+  JoypadEditControl  P2_buttonA;
 
  //}}AFX_DATA
 

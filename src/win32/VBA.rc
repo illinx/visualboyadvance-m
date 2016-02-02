@@ -220,7 +220,7 @@ BEGIN
     PUSHBUTTON      "Cancel",IDCANCEL,168,246,48,18
 END
 
-IDD_CONFIG DIALOGEX 0, 0, 448, 102
+IDD_CONFIG DIALOGEX 0, 0, 449, 205
 STYLE DS_SYSMODAL | DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Joypad configuration"
 FONT 8, "MS Sans Serif", 0, 0, 0x1
@@ -255,6 +255,18 @@ BEGIN
     DEFPUSHBUTTON   "OK",ID_OK,348,78,48,18
     PUSHBUTTON      "Cancel",ID_CANCEL,396,78,48,18
     PUSHBUTTON      "Clear all",IDC_CLEAR_ALL,306,60,36,12
+    RTEXT           "P2_Up",IDC_STATIC,7,108,36,12
+    EDITTEXT        IDC_EDIT_P2_UP,49,108,96,12,ES_AUTOHSCROLL
+    RTEXT           "P2_Down",IDC_STATIC,7,126,36,12
+    EDITTEXT        IDC_EDIT_P2_DOWN,49,126,96,12,ES_AUTOHSCROLL
+    RTEXT           "P2_Left",IDC_STATIC,7,144,36,12
+    EDITTEXT        IDC_EDIT_P2_LEFT,49,144,96,12,ES_AUTOHSCROLL
+    RTEXT           "P2_Right",IDC_STATIC,7,162,36,12
+    EDITTEXT        IDC_EDIT_P2_RIGHT,49,162,96,12,ES_AUTOHSCROLL
+    RTEXT           "P2_A",IDC_STATIC,157,107,36,12
+    EDITTEXT        IDC_EDIT_P2_BUTTON_A,199,107,96,12,ES_AUTOHSCROLL
+    RTEXT           "P2_B",IDC_STATIC,157,125,36,12
+    EDITTEXT        IDC_EDIT_P2_BUTTON_B,199,125,96,12,ES_AUTOHSCROLL
 END
 
 IDD_CHEATS DIALOG 0, 0, 276, 253
@@ -1210,9 +1222,9 @@ BEGIN
     IDD_CONFIG, DIALOG
     BEGIN
         LEFTMARGIN, 7
-        RIGHTMARGIN, 441
+        RIGHTMARGIN, 442
         TOPMARGIN, 7
-        BOTTOMMARGIN, 95
+        BOTTOMMARGIN, 198
     END
 
     IDD_CHEATS, DIALOG
@@ -2123,6 +2135,7 @@ STRINGTABLE
 BEGIN
     IDS_SELECT_SAVE_DIR     "Select Save Directory:"
     IDS_SELECT_CAPTURE_DIR  "Select Capture directory:"
+    IDS_JOY_P2_LEFT         "Joy %d Left"
     IDS_RESET               "Reset"
     IDS_AUTOFIRE_A_DISABLED "autofire A disabled"
     IDS_AUTOFIRE_A          "autofire A"
@@ -2164,6 +2177,7 @@ BEGIN
     IDS_FAILED_TO_LOAD_LIBRARY "Failed to load library %s"
     IDS_FAILED_TO_GET_LOCINFO "Failed to get locale information"
     IDS_SELECT_CHEAT_LIST_NAME "Select cheat list name"
+    IDS_JOY_P2_RIGHT        "Joy %d Right"
     IDS_FILTER_GBAROM       "Game Boy Advance ROMs (*.GBA;*.AGB;*.BIN;*.ELF;*.MB;*.ZIP;*.7Z;*.Z;*.GZ)_*.GBA;*.AGB;*.BIN;*.ELF;*.MB;*.ZIP;*.7Z;*.Z;*.GZ__"
     IDS_FILTER_SGM          "VisualBoyAdvance Save Game_*.SGM__"
     IDS_FILTER_CHEAT_LIST   "VisualBoyAdvance Cheat List_*.CLT__"
@@ -2184,6 +2198,9 @@ BEGIN
     IDS_REGISTRY            "VisualBoyAdvance no longer uses the registry to store its settings. Your previous settings have been exported into the file: %s"
     IDS_MOVIE_PLAY          "Playing a movie will load a save state which may erase your previous battery saves. Please be sure to have a saved state if you don't want to loose any previous data."
     IDS_FILTER_GSVSPS       "GS & PAC Snapshots (*.SPS;*.XPS)_*.SPS;*.XPS_GameShark SP Snapshots (*.GSV)_*.gsv__"
+    IDS_JOY_P2_UP           "Joy %d Up"
+    IDS_JOY_P2_DOWN         "Joy %d Down"
+    IDS_JOY_P2_BUTTON       "Joy %d %s"
 END
 
 STRINGTABLE

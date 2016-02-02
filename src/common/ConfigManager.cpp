@@ -820,6 +820,11 @@ const char* ReadPrefString(const char* pref_key)
 	return ReadPrefString(pref_key, "");
 }
 
+char* hackStrDup(const char* s)
+{
+    return strcpy((char *)malloc(strlen(s) + 1), s);
+}
+
 int ReadOpts(int argc, char ** argv)
 {
 	int op = -1;
@@ -859,7 +864,7 @@ int ReadOpts(int argc, char ** argv)
 				log("Missing BIOS file name\n");
 				break;
 			}
-			biosFileNameGBA = strdup(optarg);
+			biosFileNameGBA = hackStrDup(optarg);
 			break;
 		case 'c':
 		{
