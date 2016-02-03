@@ -3930,10 +3930,18 @@ void CPULoop(int ticks)
                 count = 0;
               }
               u32 joy = 0;
+              u32 joy2 = 0;
               // update joystick information
               if(systemReadJoypads())
                 // read default joystick
                 joy = systemReadJoypad(-1);
+
+              //extract top 2 bytes from joy to get the p2 input
+              joy2 = (joy >> 16);
+              //zero out the top 2 bytes from joy to prevent p2
+              //from messing w p1 controls
+              joy = (joy & 0x0000ffff);
+
               P1 = 0x03FF ^ (joy & 0x3FF);
               systemUpdateMotionSensor();
               UPDATE_REG(0x130, P1);
