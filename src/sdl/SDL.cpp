@@ -1688,6 +1688,16 @@ int main(int argc, char **argv)
   inputSetKeymap(PAD_1, KEY_BUTTON_SELECT, ReadPrefHex("Joy0_Select"));
   inputSetKeymap(PAD_1, KEY_BUTTON_SPEED, ReadPrefHex("Joy0_Speed"));
   inputSetKeymap(PAD_1, KEY_BUTTON_CAPTURE, ReadPrefHex("Joy0_Capture"));
+  inputSetKeymap(PAD_1, KEY_P2_LEFT, ReadPrefHex("Joy0_P2_Left"));
+  inputSetKeymap(PAD_1, KEY_P2_RIGHT, ReadPrefHex("Joy0_P2_Right"));
+  inputSetKeymap(PAD_1, KEY_P2_UP, ReadPrefHex("Joy0_P2_Up"));
+  inputSetKeymap(PAD_1, KEY_P2_DOWN, ReadPrefHex("Joy0_P2_Down"));
+  inputSetKeymap(PAD_1, KEY_P2_BUTTON_A, ReadPrefHex("Joy0_P2_A"));
+  inputSetKeymap(PAD_1, KEY_P2_BUTTON_B, ReadPrefHex("Joy0_P2_B"));
+  inputSetKeymap(PAD_1, KEY_P2_BUTTON_L, ReadPrefHex("Joy0_P2_L"));
+  inputSetKeymap(PAD_1, KEY_P2_BUTTON_R, ReadPrefHex("Joy0_P2_R"));
+  inputSetKeymap(PAD_1, KEY_P2_BUTTON_START, ReadPrefHex("Joy0_P2_Start"));
+  inputSetKeymap(PAD_1, KEY_P2_BUTTON_SELECT, ReadPrefHex("Joy0_P2_Select"));
   inputSetKeymap(PAD_2, KEY_LEFT, ReadPrefHex("Joy1_Left"));
   inputSetKeymap(PAD_2, KEY_RIGHT, ReadPrefHex("Joy1_Right"));
   inputSetKeymap(PAD_2, KEY_UP, ReadPrefHex("Joy1_Up"));

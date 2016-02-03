@@ -521,11 +521,38 @@ uint32_t inputReadJoypad(int which)
   if(sdlButtons[which][KEY_BUTTON_AUTO_B])
     realAutoFire ^= 2;
 
+  if(sdlButtons[which][KEY_P2_BUTTON_A])
+      res |= 65536;
+  if(sdlButtons[which][KEY_P2_BUTTON_B])
+      res |= 131072;
+  if(sdlButtons[which][KEY_P2_BUTTON_SELECT])
+      res |= 262144;
+  if(sdlButtons[which][KEY_P2_BUTTON_START])
+      res |= 524288;
+  if(sdlButtons[which][KEY_P2_RIGHT])
+      res |= 1048576;
+  if(sdlButtons[which][KEY_P2_LEFT])
+      res |= 2097152;
+  if(sdlButtons[which][KEY_P2_UP])
+      res |= 4194304;
+  if(sdlButtons[which][KEY_P2_DOWN])
+      res |= 8388608;
+  if(sdlButtons[which][KEY_P2_BUTTON_R])
+      res |= 16777216;
+  if(sdlButtons[which][KEY_P2_BUTTON_L])
+      res |= 33554432;
+
   // disallow L+R or U+D of being pressed at the same time
   if((res & 48) == 48)
     res &= ~16;
   if((res & 192) == 192)
     res &= ~128;
+
+  //do the same for virtual 2p
+  if((res & (2097152 + 1048576)) == (2097152 + 1048576))
+      res &= ~1048576;
+  if((res & (8388608 + 4194304)) == (8388608 + 4194304))
+      res &= ~8388608;
 
   if(sdlButtons[which][KEY_BUTTON_SPEED])
     res |= 1024;

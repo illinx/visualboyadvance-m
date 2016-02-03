@@ -174,6 +174,17 @@ void JoypadConfig::OnOk()
   AssignKeys(buttonB.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_B)]);
   AssignKeys(buttonA.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_BUTTON_A)]);
 
+  AssignKeys(P2_up.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_UP)]);
+  AssignKeys(P2_right.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_RIGHT)]);
+  AssignKeys(P2_left.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_LEFT)]);
+  AssignKeys(P2_down.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_DOWN)]);
+  AssignKeys(P2_buttonStart.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_START)]);
+  AssignKeys(P2_buttonSelect.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_SELECT)]);
+  AssignKeys(P2_buttonR.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_R)]);
+  AssignKeys(P2_buttonL.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_L)]);
+  AssignKeys(P2_buttonB.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_B)]);
+  AssignKeys(P2_buttonA.m_Keys,theApp.input->joypaddata[JOYPAD(which,KEY_P2_BUTTON_A)]);
+
   theApp.input->checkKeys();
   EndDialog(TRUE);
 }
