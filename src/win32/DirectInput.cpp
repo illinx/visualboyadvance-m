@@ -131,6 +131,10 @@ void winReadKeys()
     winReadKey("P2_Down", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_DOWN)]);
     winReadKey("P2_A", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_A)]);
     winReadKey("P2_B", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_B)]);
+    winReadKey("P2_L", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_L)]);
+    winReadKey("P2_R", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_R)]);
+    winReadKey("P2_Start", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_START)]);
+    winReadKey("P2_Select", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_SELECT)]);
   }
   winReadKey("Motion_Left", theApp.input->joypaddata[MOTION(KEY_LEFT)]);
   winReadKey("Motion_Right", theApp.input->joypaddata[MOTION(KEY_RIGHT)]);
@@ -184,6 +188,10 @@ void winSaveKeys()
     winSaveKey("P2_Down", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_DOWN)]);
     winSaveKey("P2_A", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_A)]);
     winSaveKey("P2_B", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_B)]);
+    winSaveKey("P2_L", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_L)]);
+    winSaveKey("P2_R", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_R)]);
+    winSaveKey("P2_Start", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_START)]);
+    winSaveKey("P2_Select", i, theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_SELECT)]);
   }
   regSetDwordValue("joyVersion", 1);
 
@@ -661,6 +669,29 @@ u32 DirectInput::readDevice(int which)
   if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_BUTTON_GS)]))
     res |= 4096;
 
+  //now read virtual 2p inputs and
+  //stuff them into the upper 16 bits of the returned u32
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_A)]))
+      res |= 65536;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_B)]))
+      res |= 131072;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_SELECT)]))
+      res |= 262144;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_START)]))
+      res |= 524288;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_RIGHT)]))
+      res |= 1048576;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_LEFT)]))
+      res |= 2097152;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_UP)]))
+      res |= 4194304;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_DOWN)]))
+      res |= 8388608;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_R)]))
+      res |= 16777216;
+  if(checkKey(theApp.input->joypaddata[JOYPAD(i,KEY_P2_BUTTON_L)]))
+      res |= 33554432;
+
   if(autoFire) {
     res &= (~autoFire);
     if(autoFireToggle)
@@ -673,6 +704,12 @@ u32 DirectInput::readDevice(int which)
     res &= ~16;
   if((res & 192) == 192)
     res &= ~128;
+
+  //do the same for virtual 2p
+  if((res & (2097152 + 1048576)) == (2097152 + 1048576))
+      res &= ~1048576;
+  if((res & (8388608 + 4194304)) == (8388608 + 4194304))
+      res &= ~8388608;
 
   if(movieRecording) {
     if(i == joypadDefault) {

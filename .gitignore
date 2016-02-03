@@ -4,3 +4,8 @@ src/wx/cmd-evtable.h
 src/wx/cmdhandlers.h
 src/wx/cmdtab.cpp
 src/wx/wxvbam.xrs
+*.obj
+*.pdb
+*.tlog
+project/vs2010_mfc/Win32/
+*.log

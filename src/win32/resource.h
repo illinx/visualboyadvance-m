@@ -139,7 +139,6 @@
 #define IDC_R14                         1014
 #define IDC_EDIT_BUTTON_R               1014
 #define IDC_R15                         1015
-#define IDC_P2_EDIT_UP                  1015
 #define IDC_EDIT_P2_UP                  1015
 #define IDC_R16                         1016
 #define IDC_EDIT_P2_DOWN                1016
@@ -151,9 +150,11 @@
 #define IDC_Z_FLAG                      1019
 #define IDC_NEXT                        1019
 #define IDC_BATTERY_DIR                 1019
+#define IDC_EDIT_P2_BUTTON_L            1019
 #define IDC_C_FLAG                      1020
 #define IDC_CONTINUE                    1020
 #define IDC_SAVE_DIR                    1020
+#define IDC_EDIT_P2_BUTTON_R            1020
 #define IDC_V_FLAG                      1021
 #define IDC_CAPTURE_DIR                 1021
 #define IDC_CHEAT_LIST                  1021
@@ -165,9 +166,12 @@
 #define IDC_T_FLAG                      1023
 #define IDC_BATTERY_PATH                1023
 #define IDC_SEARCH                      1023
+#define IDC_EDIT_P2_BUTTON_SELECT       1023
 #define IDS_DIRECTX_7_REQUIRED          1024
 #define IDC_SAVE_PATH                   1024
 #define IDC_ADD_CHEAT                   1024
+#define IDC_EDIT_BUTTON_START2          1024
+#define IDC_EDIT_P2_BUTTON_START        1024
 #define IDC_M4                          1025
 #define IDC_CAPTURE_PATH                1025
 #define IDC_OLD_VALUE                   1025
