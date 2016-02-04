@@ -1053,6 +1053,7 @@ void debuggerIoTimer()
 void debuggerIoMisc()
 {
 	{ sprintf(monbuf, "P1       = %04x\n", P1); monprintf(monbuf); }
+    { sprintf(monbuf, "P2       = %04x\n", P2); monprintf(monbuf); }
 	{ sprintf(monbuf, "IE       = %04x\n", IE); monprintf(monbuf); }
 	{ sprintf(monbuf, "IF       = %04x\n", IF); monprintf(monbuf); }
 	{ sprintf(monbuf, "IME      = %04x\n", IME); monprintf(monbuf); }

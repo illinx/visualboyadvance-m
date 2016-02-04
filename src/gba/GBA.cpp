@@ -421,6 +421,7 @@ variable_desc saveGameStruct[] = {
   { &TM3D     , sizeof(u16) },
   { &TM3CNT   , sizeof(u16) },
   { &P1       , sizeof(u16) },
+  { &P2       , sizeof(u16) },
   { &IE       , sizeof(u16) },
   { &IF       , sizeof(u16) },
   { &IME      , sizeof(u16) },
@@ -3203,6 +3204,11 @@ void CPUUpdateRegister(u32 address, u16 value)
 	  UPDATE_REG(0x132, value & 0xC3FF);
 	  break;
 
+  case 0x138:
+      P2 |= (value & 0x3FF);
+      UPDATE_REG(0x138, P2);
+      break;
+
 #ifndef NO_LINK
   case COMM_RCNT:
 	  StartGPLink(value);
@@ -3454,8 +3460,8 @@ void CPUInit(const char *biosFileName, bool useBiosFile)
     ioReadable[i] = false;
   for(i = 0x12c; i < 0x130; i++)
     ioReadable[i] = false;
-  for(i = 0x138; i < 0x140; i++)
-    ioReadable[i] = false;
+//  for(i = 0x138; i < 0x140; i++)  //0x138 is for P2 controls now--let it be writeable
+//    ioReadable[i] = false;
   for(i = 0x144; i < 0x150; i++)
     ioReadable[i] = false;
   for(i = 0x15c; i < 0x200; i++)
@@ -3644,6 +3650,7 @@ void CPUReset()
   TM3D     = 0x0000;
   TM3CNT   = 0x0000;
   P1       = 0x03FF;
+  P2       = 0x03FF;
   IE       = 0x0000;
   IF       = 0x0000;
   IME      = 0x0000;
@@ -3680,6 +3687,7 @@ void CPUReset()
   UPDATE_REG(0x30, BG3PA);
   UPDATE_REG(0x36, BG3PD);
   UPDATE_REG(0x130, P1);
+  UPDATE_REG(0x138, P2);
   UPDATE_REG(0x88, 0x200);
 
   // disable FIQ
@@ -3943,8 +3951,11 @@ void CPULoop(int ticks)
               joy = (joy & 0x0000ffff);
 
               P1 = 0x03FF ^ (joy & 0x3FF);
+              P2 = 0x03FF ^ (joy2 & 0x3FF);
+
               systemUpdateMotionSensor();
               UPDATE_REG(0x130, P1);
+              UPDATE_REG(0x138, P2);
               u16 P1CNT = READ16LE(((u16 *)&ioMem[0x132]));
               // this seems wrong, but there are cases where the game
               // can enter the stop state without requesting an IRQ from

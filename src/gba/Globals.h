@@ -120,6 +120,7 @@ extern u16 TM2CNT;
 extern u16 TM3D;
 extern u16 TM3CNT;
 extern u16 P1;
+extern u16 P2;
 extern u16 IE;
 extern u16 IF;
 extern u16 IME;

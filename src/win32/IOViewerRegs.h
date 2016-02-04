@@ -1961,6 +1961,27 @@ const IOData ioViewRegisters[] = {
     }
   },
   {
+    &P2, 0x138, "0x4000138-P2", 0x03FF,
+    {
+      "A",
+      "B",
+      "Select",
+      "Start",
+      "Right",
+      "Left",
+      "Up",
+      "Down",
+      "Shoulder Right",
+      "Shoulder Left",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      }
+  },
+  {
     &IE, 0x200, "0x4000200-IE", 0x3FFF,
     {
       "VBlank",

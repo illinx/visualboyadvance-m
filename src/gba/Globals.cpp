@@ -107,6 +107,7 @@ u16 TM2CNT   = 0x0000;
 u16 TM3D     = 0x0000;
 u16 TM3CNT   = 0x0000;
 u16 P1       = 0xFFFF;
+u16 P2       = 0xFFFF;      
 u16 IE       = 0x0000;
 u16 IF       = 0x0000;
 u16 IME      = 0x0000;
