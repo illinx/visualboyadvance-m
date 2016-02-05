@@ -421,7 +421,6 @@ variable_desc saveGameStruct[] = {
   { &TM3D     , sizeof(u16) },
   { &TM3CNT   , sizeof(u16) },
   { &P1       , sizeof(u16) },
-  { &P2       , sizeof(u16) },
   { &IE       , sizeof(u16) },
   { &IF       , sizeof(u16) },
   { &IME      , sizeof(u16) },
@@ -463,6 +462,7 @@ variable_desc saveGameStruct[] = {
   { &armNextPC , sizeof(u32) },
   { &armMode , sizeof(int) },
   { &saveType , sizeof(int) },
+  { &P2       , sizeof(u16) },
   { NULL, 0 }
 };
 
