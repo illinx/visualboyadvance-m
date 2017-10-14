@@ -230,7 +230,8 @@
       <object class="wxMenuItem" name="ToggleFullscreen">
         <label>Toggle _full screen</label>
         <bitmap platform="unix" stock_id="gtk-fullscreen"/>
-        <accel>F11</accel>
+        <accel platform="win|unix">F11</accel>
+        <accel platform="mac">RawCtrl+Ctrl+F</accel>
       </object>
       <object class="separator"/>
       <object class="wxMenuItem" name="EmulatorSpeedupToggle">
@@ -625,12 +626,14 @@
       <object class="wxMenuItem" name="Translate">
         <label>Translations</label>
       </object>
+      <!-- FIXME: turn this back on when Sparkle is implemented
       <object class="wxMenuItem" name="UpdateRDB">
         <label>Update ROM database</label>
       </object>
       <object class="wxMenuItem" name="UpdateEmu">
         <label>Check for updates</label>
       </object>
+      -->
       <object class="separator"/>
       <object class="wxMenuItem" name="wxID_ABOUT"/>
     </object>

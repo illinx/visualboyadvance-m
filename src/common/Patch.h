@@ -1,8 +1,8 @@
 #ifndef PATCH_H
 #define PATCH_H
 
-#include "Types.h"
+#include "cstdint.h"
 
-bool applyPatch(const char *patchname, u8 **rom, int *size);
+bool applyPatch(const char *patchname, uint8_t **rom, int *size);
 
 #endif // PATCH_H

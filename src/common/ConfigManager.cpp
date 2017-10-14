@@ -236,9 +236,9 @@ int winGbBorderOn;
 int winGbPrinterEnabled;
 int winPauseNextFrame;
 int* rewindSerials = NULL;
-u32 autoFrameSkipLastTime;
-u32 movieLastJoypad;
-u32 movieNextJoypad;
+uint32_t autoFrameSkipLastTime;
+uint32_t movieLastJoypad;
+uint32_t movieNextJoypad;
 int throttle;
 
 const char* preparedCheatCodes[MAX_CHEATS];
@@ -252,7 +252,7 @@ char *(patchNames[PATCH_MAX_NUM]) = { NULL }; // and so on
 
 void(*dbgMain)() = remoteStubMain;
 void(*dbgSignal)(int, int) = remoteStubSignal;
-void(*dbgOutput)(const char *, u32) = debuggerOutput;
+void(*dbgOutput)(const char *, uint32_t) = debuggerOutput;
 
 char* homeDir = NULL;
 char* arg0 = NULL;
@@ -388,20 +388,20 @@ struct option argOptions[] = {
 };
 
 
-u32 fromHex(const char *s)
+uint32_t fromHex(const char *s)
 {
 	if (!s)
 		return 0;
-	u32 value;
+	uint32_t value;
 	sscanf(s, "%x", &value);
 	return value;
 }
 
-u32 fromDec(const char *s)
+uint32_t fromDec(const char *s)
 {
 	if (!s)
 		return 0;
-	u32 value = 0;
+	uint32_t value = 0;
 	sscanf(s, "%u", &value);
 	return value;
 }
@@ -537,15 +537,15 @@ void LoadConfig()
 	winGbBorderOn = ReadPref("borderOn", 0);
 	winGbPrinterEnabled = ReadPref("gbPrinter", 0);
 
-	int soundQuality = (ReadPrefHex("soundQuality"));
+	int soundQuality = (ReadPrefHex("soundQuality", 1));
 	switch (soundQuality) {
 	case 1:
 	case 2:
 	case 4:
 		break;
 	default:
-		log("Unknown sound quality %d. Defaulting to 22Khz\n", soundQuality);
-		soundQuality = 2;
+		log("Unknown sound quality %d. Defaulting to 44Khz\n", soundQuality);
+		soundQuality = 1;
 		break;
 	}
 	soundSetSampleRate(44100 / soundQuality);
@@ -696,7 +696,7 @@ const char* FindConfigFile(const char *name)
 		return path;
 	}
 
-	sprintf(path, "%s%c%s", SYSCONFDIR, FILE_SEP, name);
+	sprintf(path, "%s%c%s", SYSCONF_INSTALL_DIR, FILE_SEP, name);
 	if (FileExists(path))
 	{
 		return path;
@@ -758,6 +758,10 @@ void SaveConfigFile()
 	if (configFile != NULL)
 	{
 		FILE *f = fopen(configFile, "w");
+		if (f == NULL) {
+			log("Configuration file could not be opened %s\n", optarg);
+			return;
+		}
 		// Needs mixed case version of the option name to add new options into the ini
 		//for (int i = 0; i < (sizeof(argOptions) / sizeof(option)); i++)
 		//{
@@ -773,7 +777,7 @@ void SaveConfigFile()
 	}
 }
 
-u32 ReadPrefHex(const char* pref_key, int default_value)
+uint32_t ReadPrefHex(const char* pref_key, int default_value)
 {
     std::stringstream ss;
     std::string default_string;
@@ -786,7 +790,7 @@ u32 ReadPrefHex(const char* pref_key, int default_value)
     return fromHex(iniparser_getstring(preferences, pref.c_str(), default_string.c_str()));
 }
 
-u32 ReadPrefHex(const char* pref_key)
+uint32_t ReadPrefHex(const char* pref_key)
 {
 	LoadConfigFile();
 	std::string pref = "preferences:";
@@ -794,7 +798,7 @@ u32 ReadPrefHex(const char* pref_key)
 	return fromHex(iniparser_getstring(preferences, pref.c_str(), 0));
 }
 
-u32 ReadPref(const char* pref_key, int default_value)
+uint32_t ReadPref(const char* pref_key, int default_value)
 {
 	LoadConfigFile();
 	std::string pref = "preferences:";
@@ -802,7 +806,7 @@ u32 ReadPref(const char* pref_key, int default_value)
 	return iniparser_getint(preferences, pref.c_str(), default_value);
 }
 
-u32 ReadPref(const char* pref_key)
+uint32_t ReadPref(const char* pref_key)
 {
 	return ReadPref(pref_key, 0);
 }
@@ -820,9 +824,26 @@ const char* ReadPrefString(const char* pref_key)
 	return ReadPrefString(pref_key, "");
 }
 
-char* hackStrDup(const char* s)
+/*-------------------------------------------------------------------------*/
+/**
+  @brief    Duplicate a string
+  @param    s String to duplicate
+  @return   Pointer to a newly allocated string, to be freed with free()
+
+  This is a replacement for strdup(). This implementation is provided
+  for systems that do not have it.
+ */
+/*--------------------------------------------------------------------------*/
+static char *xstrdup(const char *s)
 {
-    return strcpy((char *)malloc(strlen(s) + 1), s);
+        char *t;
+        if (!s)
+                return NULL;
+        t = (char *)malloc(strlen(s) + 1);
+        if (t) {
+                strcpy(t, s);
+        }
+        return t;
 }
 
 int ReadOpts(int argc, char ** argv)
@@ -864,7 +885,7 @@ int ReadOpts(int argc, char ** argv)
 				log("Missing BIOS file name\n");
 				break;
 			}
-			biosFileNameGBA = hackStrDup(optarg);
+			biosFileNameGBA = xstrdup(optarg);
 			break;
 		case 'c':
 		{

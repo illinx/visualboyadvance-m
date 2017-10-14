@@ -11,11 +11,11 @@
 
 /* @(#) $Id$ */
 
-#include <stdio.h>
+#include <errno.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 #include "memgzio.h"
 
@@ -24,7 +24,7 @@
 #endif
 
 #ifndef DEF_MEM_LEVEL
-#  define DEF_MEM_LEVEL 8
+#define DEF_MEM_LEVEL 8
 #endif
 
 #ifndef OS_CODE
@@ -35,24 +35,27 @@
 #define zmemcpy memcpy
 #endif
 
-
 /*struct internal_state {int dummy;};*/ /* for buggy compilers */
 
 #ifndef Z_BUFSIZE
-#  ifdef MAXSEG_64K
-#    define Z_BUFSIZE 4096 /* minimize memory usage for 16-bit DOS */
-#  else
-#    define Z_BUFSIZE 16384
-#  endif
+#ifdef MAXSEG_64K
+#define Z_BUFSIZE 4096 /* minimize memory usage for 16-bit DOS */
+#else
+#define Z_BUFSIZE 16384
+#endif
 #endif
 #ifndef Z_PRINTF_BUFSIZE
-#  define Z_PRINTF_BUFSIZE 4096
+#define Z_PRINTF_BUFSIZE 4096
 #endif
 
 #define ALLOC(size) malloc(size)
-#define TRYFREE(p) {if (p) free(p);}
+#define TRYFREE(p)                                                                                 \
+        {                                                                                          \
+                if (p)                                                                             \
+                        free(p);                                                                   \
+        }
 
-static int gz_magic[2] = {0x1f, 0x8b}; /* gzip magic header */
+static int gz_magic[2] = { 0x1f, 0x8b }; /* gzip magic header */
 
 /* gzip flag byte */
 #define ASCII_FLAG   0x01 /* bit 0 set: file probably ascii text */
@@ -84,23 +87,22 @@ typedef struct mem_stream {
     long     startpos; /* start of compressed data in file (header skipped) */
 } mem_stream;
 
-
 local gzFile gz_open      OF((char *memory, const int available, const char *mode));
 local int do_flush        OF((gzFile file, int flush));
-local int    get_byte     OF((mem_stream *s));
-local void   check_header OF((mem_stream *s));
-local int    destroy      OF((mem_stream *s));
-local void   putLong      OF((MEMFILE *file, uLong x));
-local uLong  getLong      OF((mem_stream *s));
+local int get_byte OF((mem_stream * s));
+local void check_header OF((mem_stream * s));
+local int destroy OF((mem_stream * s));
+local void putLong OF((MEMFILE * file, uLong x));
+local uLong getLong OF((mem_stream * s));
 
 local MEMFILE *memOpen(char *memory, int available, char mode)
 {
   MEMFILE *f;
 
-  if(available <= 8)
+        if (available <= 8)
     return NULL;
 
-  if(mode != 'w' && mode != 'r')
+        if (mode != 'w' && mode != 'r')
     return NULL;
 
   f = (MEMFILE *)malloc(sizeof(MEMFILE));
@@ -109,38 +111,36 @@ local MEMFILE *memOpen(char *memory, int available, char mode)
   f->mode = mode;
   f->error = 0;
 
-  if(mode == 'w') {
+        if (mode == 'w') {
     f->available = available - 8;
     f->next = memory + 8;
     memory[0] = 'V';
     memory[1] = 'B';
     memory[2] = 'A';
     memory[3] = ' ';
-    *((int *)(memory+4)) = 0;
+                *((int *)(memory + 4)) = 0;
   } else {
-    if(memory[0] != 'V' || memory[1] != 'B' || memory[2] != 'A' ||
-       memory[3] != ' ') {
+                if (memory[0] != 'V' || memory[1] != 'B' || memory[2] != 'A' || memory[3] != ' ') {
       free(f);
       return NULL;
     }
-    f->available = *((int *)(memory+4));
-    f->next = memory+8;
+                f->available = *((int *)(memory + 4));
+                f->next = memory + 8;
   }
 
   return f;
 }
 
-local size_t memWrite(const void *buffer, size_t size, size_t count,
-                      MEMFILE *file)
+local size_t memWrite(const void *buffer, size_t size, size_t count, MEMFILE *file)
 {
-  size_t total = size*count;
+        size_t total = size * count;
 
-  if(file->mode != 'w') {
+        if (file->mode != 'w') {
     file->error = 1;
     return 0;
   }
 
-  if(total > (size_t)file->available) {
+        if (total > (size_t)file->available) {
     total = file->available;
   }
   memcpy(file->next, buffer, total);
@@ -149,20 +149,19 @@ local size_t memWrite(const void *buffer, size_t size, size_t count,
   return total;
 }
 
-local size_t memRead(void *buffer, size_t size, size_t count,
-                     MEMFILE *file)
+local size_t memRead(void *buffer, size_t size, size_t count, MEMFILE *file)
 {
-  size_t total = size*count;
+        size_t total = size * count;
 
-  if(file->mode != 'r') {
+        if (file->mode != 'r') {
     file->error = 1;
     return 0;
   }
 
-  if(file->available == 0)
+        if (file->available == 0)
     return -1;
 
-  if(total > (size_t)file->available) {
+        if (total > (size_t)file->available) {
     total = file->available;
   }
   memcpy(buffer, file->next, total);
@@ -173,12 +172,12 @@ local size_t memRead(void *buffer, size_t size, size_t count,
 
 local int memPutc(int c, MEMFILE *file)
 {
-  if(file->mode != 'w') {
+        if (file->mode != 'w') {
     file->error = 1;
     return -1;
   }
 
-  if(file->available >= 1) {
+        if (file->available >= 1) {
     *file->next++ = c;
     file->available--;
   } else
@@ -199,8 +198,8 @@ local int memError(MEMFILE *f)
 
 local int memClose(MEMFILE *f)
 {
-  if(f->mode == 'w') {
-    *((int *)(f->memory+4)) = memTell(f);
+        if (f->mode == 'w') {
+                *((int *)(f->memory + 4)) = memTell(f);
   }
   free(f);
   return 0;
@@ -228,21 +227,21 @@ local int memPrintf(MEMFILE *f, const char *format, ...)
    can be checked to distinguish the two cases (if errno is zero, the
    zlib error is Z_MEM_ERROR).
 */
-local gzFile gz_open (memory, available, mode)
-    char *memory;
-    const int available;
-    const char *mode;
+local gzFile gz_open(memory, available, mode) char *memory;
+const int available;
+const char *mode;
 {
     int err;
     int level = Z_DEFAULT_COMPRESSION; /* compression level */
     int strategy = Z_DEFAULT_STRATEGY; /* compression strategy */
-    char *p = (char*)mode;
+        char *p = (char *)mode;
     mem_stream *s;
     char fmode[80]; /* copy of mode, without the compression level */
     char *m = fmode;
 
     s = (mem_stream *)ALLOC(sizeof(mem_stream));
-    if (!s) return Z_NULL;
+        if (!s)
+                return Z_NULL;
 
     s->stream.zalloc = (alloc_func)0;
     s->stream.zfree = (free_func)0;
@@ -259,8 +258,10 @@ local gzFile gz_open (memory, available, mode)
 
     s->mode = '\0';
     do {
-        if (*p == 'r') s->mode = 'r';
-        if (*p == 'w' || *p == 'a') s->mode = 'w';
+                if (*p == 'r')
+                        s->mode = 'r';
+                if (*p == 'w' || *p == 'a')
+                        s->mode = 'w';
         if (*p >= '0' && *p <= '9') {
 	    level = *p - '0';
 	} else if (*p == 'f') {
@@ -271,23 +272,28 @@ local gzFile gz_open (memory, available, mode)
 	    *m++ = *p; /* copy the mode */
 	}
     } while (*p++ && m != fmode + sizeof(fmode));
-    if (s->mode == '\0') return destroy(s), (gzFile)Z_NULL;
+        if (s->mode == '\0')
+                return destroy(s), (gzFile)Z_NULL;
 
     if (s->mode == 'w') {
 #ifdef NO_DEFLATE
         err = Z_STREAM_ERROR;
 #else
-        err = deflateInit2(&(s->stream), level,
-                           Z_DEFLATED, -MAX_WBITS, DEF_MEM_LEVEL, strategy);
+                err = deflateInit2(&(s->stream),
+                                   level,
+                                   Z_DEFLATED,
+                                   -MAX_WBITS,
+                                   DEF_MEM_LEVEL,
+                                   strategy);
         /* windowBits is passed < 0 to suppress zlib header */
 
-        s->stream.next_out = s->outbuf = (Byte*)ALLOC(Z_BUFSIZE);
+                s->stream.next_out = s->outbuf = (Byte *)ALLOC(Z_BUFSIZE);
 #endif
         if (err != Z_OK || s->outbuf == Z_NULL) {
             return destroy(s), (gzFile)Z_NULL;
         }
     } else {
-        s->stream.next_in  = s->inbuf = (Byte*)ALLOC(Z_BUFSIZE);
+                s->stream.next_in = s->inbuf = (Byte *)ALLOC(Z_BUFSIZE);
 
         err = inflateInit2(&(s->stream), -MAX_WBITS);
         /* windowBits is passed < 0 to tell that there is no zlib header.
@@ -312,8 +318,18 @@ local gzFile gz_open (memory, available, mode)
     if (s->mode == 'w') {
         /* Write a very simple .gz header:
          */
-        memPrintf(s->file, "%c%c%c%c%c%c%c%c%c%c", gz_magic[0], gz_magic[1],
-             Z_DEFLATED, 0 /*flags*/, 0,0,0,0 /*time*/, 0 /*xflags*/, OS_CODE);
+                memPrintf(s->file,
+                          "%c%c%c%c%c%c%c%c%c%c",
+                          gz_magic[0],
+                          gz_magic[1],
+                          Z_DEFLATED,
+                          0 /*flags*/,
+                          0,
+                          0,
+                          0,
+                          0 /*time*/,
+                          0 /*xflags*/,
+                          OS_CODE);
 	s->startpos = 10L;
 	/* We use 10L instead of ftell(s->file) to because ftell causes an
          * fflush on some systems. This version of the library doesn't use
@@ -331,12 +347,11 @@ local gzFile gz_open (memory, available, mode)
 /* ===========================================================================
      Opens a gzip (.gz) file for reading or writing.
 */
-gzFile ZEXPORT memgzopen (memory, available, mode)
-    char *memory;
-    int available;
-    const char *mode;
+gzFile ZEXPORT memgzopen(memory, available, mode) char *memory;
+int available;
+const char *mode;
 {
-    return gz_open (memory, available, mode);
+        return gz_open(memory, available, mode);
 }
 
 /* ===========================================================================
@@ -344,16 +359,17 @@ gzFile ZEXPORT memgzopen (memory, available, mode)
    for end of file.
    IN assertion: the stream s has been sucessfully opened for reading.
 */
-local int get_byte(s)
-    mem_stream *s;
+local int get_byte(s) mem_stream *s;
 {
-    if (s->z_eof) return EOF;
+        if (s->z_eof)
+                return EOF;
     if (s->stream.avail_in == 0) {
 	errno = 0;
 	s->stream.avail_in = (uInt)memRead(s->inbuf, 1, Z_BUFSIZE, s->file);
 	if (s->stream.avail_in == 0) {
 	    s->z_eof = 1;
-	    if (memError(s->file)) s->z_err = Z_ERRNO;
+                        if (memError(s->file))
+                                s->z_err = Z_ERRNO;
 	    return EOF;
 	}
 	s->stream.next_in = s->inbuf;
@@ -371,8 +387,7 @@ local int get_byte(s)
        s->stream.avail_in is zero for the first time, but may be non-zero
        for concatenated .gz files.
 */
-local void check_header(s)
-    mem_stream *s;
+local void check_header(s) mem_stream *s;
 {
     int method; /* method byte */
     int flags;  /* flags byte */
@@ -383,7 +398,8 @@ local void check_header(s)
     for (len = 0; len < 2; len++) {
 	c = get_byte(s);
 	if (c != gz_magic[len]) {
-	    if (len != 0) s->stream.avail_in++, s->stream.next_in--;
+                        if (len != 0)
+                                s->stream.avail_in++, s->stream.next_in--;
 	    if (c != EOF) {
 		s->stream.avail_in++, s->stream.next_in--;
 		s->transparent = 1;
@@ -400,36 +416,41 @@ local void check_header(s)
     }
 
     /* Discard time, xflags and OS code: */
-    for (len = 0; len < 6; len++) (void)get_byte(s);
+        for (len = 0; len < 6; len++)
+                (void)get_byte(s);
 
     if ((flags & EXTRA_FIELD) != 0) { /* skip the extra field */
 	len  =  (uInt)get_byte(s);
-	len += ((uInt)get_byte(s))<<8;
+                len += ((uInt)get_byte(s)) << 8;
 	/* len is garbage if EOF but the loop below will quit anyway */
-	while (len-- != 0 && get_byte(s) != EOF) ;
+                while (len-- != 0 && get_byte(s) != EOF)
+                        ;
     }
     if ((flags & ORIG_NAME) != 0) { /* skip the original file name */
-	while ((c = get_byte(s)) != 0 && c != EOF) ;
+                while ((c = get_byte(s)) != 0 && c != EOF)
+                        ;
     }
     if ((flags & COMMENT) != 0) {   /* skip the .gz file comment */
-	while ((c = get_byte(s)) != 0 && c != EOF) ;
+                while ((c = get_byte(s)) != 0 && c != EOF)
+                        ;
     }
     if ((flags & HEAD_CRC) != 0) {  /* skip the header crc */
-	for (len = 0; len < 2; len++) (void)get_byte(s);
+                for (len = 0; len < 2; len++)
+                        (void)get_byte(s);
     }
     s->z_err = s->z_eof ? Z_DATA_ERROR : Z_OK;
 }
 
- /* ===========================================================================
- * Cleanup then free the given mem_stream. Return a zlib error code.
+/* ===========================================================================
+* Cleanup then free the given mem_stream. Return a zlib error code.
    Try freeing in the reverse order of allocations.
- */
-local int destroy (s)
-    mem_stream *s;
+*/
+local int destroy(s) mem_stream *s;
 {
     int err = Z_OK;
 
-    if (!s) return Z_STREAM_ERROR;
+        if (!s)
+                return Z_STREAM_ERROR;
 
     TRYFREE(s->msg);
 
@@ -450,7 +471,8 @@ local int destroy (s)
 #endif
 	    err = Z_ERRNO;
     }
-    if (s->z_err < 0) err = s->z_err;
+        if (s->z_err < 0)
+                err = s->z_err;
 
     TRYFREE(s->inbuf);
     TRYFREE(s->outbuf);
@@ -462,30 +484,32 @@ local int destroy (s)
      Reads the given number of uncompressed bytes from the compressed file.
    gzread returns the number of bytes actually read (0 for end of file).
 */
-int ZEXPORT memgzread (file, buf, len)
-    gzFile file;
-    voidp buf;
-    unsigned len;
+int ZEXPORT memgzread(file, buf, len) gzFile file;
+voidp buf;
+unsigned len;
 {
-    mem_stream *s = (mem_stream*)file;
-    Bytef *start = (Bytef*)buf; /* starting point for crc computation */
+        mem_stream *s = (mem_stream *)file;
+        Bytef *start = (Bytef *)buf; /* starting point for crc computation */
     Byte  *next_out; /* == stream.next_out but not forced far (for MSDOS) */
 
-    if (s == NULL || s->mode != 'r') return Z_STREAM_ERROR;
+        if (s == NULL || s->mode != 'r')
+                return Z_STREAM_ERROR;
 
-    if (s->z_err == Z_DATA_ERROR || s->z_err == Z_ERRNO) return -1;
-    if (s->z_err == Z_STREAM_END) return 0;  /* EOF */
+        if (s->z_err == Z_DATA_ERROR || s->z_err == Z_ERRNO)
+                return -1;
+        if (s->z_err == Z_STREAM_END)
+                return 0; /* EOF */
 
-    next_out = (Byte*)buf;
-    s->stream.next_out = (Bytef*)buf;
+        next_out = (Byte *)buf;
+        s->stream.next_out = (Bytef *)buf;
     s->stream.avail_out = len;
 
     while (s->stream.avail_out != 0) {
-
 	if (s->transparent) {
 	    /* Copy first the lookahead bytes: */
 	    uInt n = s->stream.avail_in;
-	    if (n > s->stream.avail_out) n = s->stream.avail_out;
+                        if (n > s->stream.avail_out)
+                                n = s->stream.avail_out;
 	    if (n > 0) {
 		zmemcpy(s->stream.next_out, s->stream.next_in, n);
 		next_out += n;
@@ -495,16 +519,17 @@ int ZEXPORT memgzread (file, buf, len)
 		s->stream.avail_in  -= n;
 	    }
 	    if (s->stream.avail_out > 0) {
-		s->stream.avail_out -= (uInt)memRead(next_out, 1, s->stream.avail_out, s->file);
+                                s->stream.avail_out -=
+                                    (uInt)memRead(next_out, 1, s->stream.avail_out, s->file);
 	    }
 	    len -= s->stream.avail_out;
 	    s->stream.total_in  += (uLong)len;
 	    s->stream.total_out += (uLong)len;
-            if (len == 0) s->z_eof = 1;
+                        if (len == 0)
+                                s->z_eof = 1;
 	    return (int)len;
 	}
         if (s->stream.avail_in == 0 && !s->z_eof) {
-
             errno = 0;
             s->stream.avail_in = (uInt)memRead(s->inbuf, 1, Z_BUFSIZE, s->file);
             if (s->stream.avail_in == 0) {
@@ -543,35 +568,33 @@ int ZEXPORT memgzread (file, buf, len)
 		}
 	    }
 	}
-	if (s->z_err != Z_OK || s->z_eof) break;
+                if (s->z_err != Z_OK || s->z_eof)
+                        break;
     }
     s->crc = crc32(s->crc, start, (uInt)(s->stream.next_out - start));
 
     return (int)(len - s->stream.avail_out);
 }
 
-
 #ifndef NO_DEFLATE
 /* ===========================================================================
      Writes the given number of uncompressed bytes into the compressed file.
    gzwrite returns the number of bytes actually written (0 in case of error).
 */
-int ZEXPORT memgzwrite (file, buf, len)
-    gzFile file;
-    const voidp buf;
-    unsigned len;
+int ZEXPORT memgzwrite(file, buf, len) gzFile file;
+const voidp buf;
+unsigned len;
 {
-    mem_stream *s = (mem_stream*)file;
+        mem_stream *s = (mem_stream *)file;
 
-    if (s == NULL || s->mode != 'w') return Z_STREAM_ERROR;
+        if (s == NULL || s->mode != 'w')
+                return Z_STREAM_ERROR;
 
-    s->stream.next_in = (Bytef*)buf;
+        s->stream.next_in = (Bytef *)buf;
     s->stream.avail_in = len;
 
     while (s->stream.avail_in != 0) {
-
         if (s->stream.avail_out == 0) {
-
             s->stream.next_out = s->outbuf;
             if (memWrite(s->outbuf, 1, Z_BUFSIZE, s->file) != Z_BUFSIZE) {
                 s->z_err = Z_ERRNO;
@@ -580,7 +603,8 @@ int ZEXPORT memgzwrite (file, buf, len)
             s->stream.avail_out = Z_BUFSIZE;
         }
         s->z_err = deflate(&(s->stream), Z_NO_FLUSH);
-        if (s->z_err != Z_OK) break;
+                if (s->z_err != Z_OK)
+                        break;
     }
     s->crc = crc32(s->crc, (const Bytef *)buf, len);
 
@@ -591,15 +615,15 @@ int ZEXPORT memgzwrite (file, buf, len)
      Flushes all pending output into the compressed file. The parameter
    flush is as in the deflate() function.
 */
-local int do_flush (file, flush)
-    gzFile file;
-    int flush;
+local int do_flush(file, flush) gzFile file;
+int flush;
 {
     uInt len;
     int done = 0;
-    mem_stream *s = (mem_stream*)file;
+        mem_stream *s = (mem_stream *)file;
 
-    if (s == NULL || s->mode != 'w') return Z_STREAM_ERROR;
+        if (s == NULL || s->mode != 'w')
+                return Z_STREAM_ERROR;
 
     s->stream.avail_in = 0; /* should be zero already anyway */
 
@@ -614,18 +638,21 @@ local int do_flush (file, flush)
             s->stream.next_out = s->outbuf;
             s->stream.avail_out = Z_BUFSIZE;
         }
-        if (done) break;
+                if (done)
+                        break;
         s->z_err = deflate(&(s->stream), flush);
 
 	/* Ignore the second of two consecutive flushes: */
-	if (len == 0 && s->z_err == Z_BUF_ERROR) s->z_err = Z_OK;
+                if (len == 0 && s->z_err == Z_BUF_ERROR)
+                        s->z_err = Z_OK;
 
         /* deflate has finished flushing only when it hasn't used up
          * all the available space in the output buffer:
          */
         done = (s->stream.avail_out != 0 || s->z_err == Z_STREAM_END);
 
-        if (s->z_err != Z_OK && s->z_err != Z_STREAM_END) break;
+                if (s->z_err != Z_OK && s->z_err != Z_STREAM_END)
+                        break;
     }
     return  s->z_err == Z_STREAM_END ? Z_OK : s->z_err;
 }
@@ -633,9 +660,8 @@ local int do_flush (file, flush)
 /* ===========================================================================
    Outputs a long in LSB order to the given file
 */
-local void putLong (file, x)
-    MEMFILE *file;
-    uLong x;
+local void putLong(file, x) MEMFILE *file;
+uLong x;
 {
     int n;
     for (n = 0; n < 4; n++) {
@@ -648,17 +674,17 @@ local void putLong (file, x)
    Reads a long in LSB order from the given mem_stream. Sets z_err in case
    of error.
 */
-local uLong getLong (s)
-    mem_stream *s;
+local uLong getLong(s) mem_stream *s;
 {
     uLong x = (uLong)get_byte(s);
     int c;
 
-    x += ((uLong)get_byte(s))<<8;
-    x += ((uLong)get_byte(s))<<16;
+        x += ((uLong)get_byte(s)) << 8;
+        x += ((uLong)get_byte(s)) << 16;
     c = get_byte(s);
-    if (c == EOF) s->z_err = Z_DATA_ERROR;
-    x += ((uLong)c)<<24;
+        if (c == EOF)
+                s->z_err = Z_DATA_ERROR;
+        x += ((uLong)c) << 24;
     return x;
 }
 
@@ -666,36 +692,37 @@ local uLong getLong (s)
      Flushes all pending output if necessary, closes the compressed file
    and deallocates all the (de)compression state.
 */
-int ZEXPORT memgzclose (file)
-    gzFile file;
+int ZEXPORT memgzclose(file) gzFile file;
 {
     int err;
-    mem_stream *s = (mem_stream*)file;
+        mem_stream *s = (mem_stream *)file;
 
-    if (s == NULL) return Z_STREAM_ERROR;
+        if (s == NULL)
+                return Z_STREAM_ERROR;
 
     if (s->mode == 'w') {
 #ifdef NO_DEFLATE
 	return Z_STREAM_ERROR;
 #else
-        err = do_flush (file, Z_FINISH);
-        if (err != Z_OK) return destroy((mem_stream*)file);
+                err = do_flush(file, Z_FINISH);
+                if (err != Z_OK)
+                        return destroy((mem_stream *)file);
 
-        putLong (s->file, s->crc);
-        putLong (s->file, s->stream.total_in);
+                putLong(s->file, s->crc);
+                putLong(s->file, s->stream.total_in);
 #endif
     }
-    return destroy((mem_stream*)file);
+        return destroy((mem_stream *)file);
 }
 
-long ZEXPORT memtell(file)
-     gzFile file;
+long ZEXPORT memtell(file) gzFile file;
 {
-    mem_stream *s = 0;
-    do_flush (file, Z_FULL_FLUSH); // makes memtell to tell truth
-    s = (mem_stream*)file;
+        mem_stream *s;
+        do_flush(file, Z_FULL_FLUSH); // makes memtell to tell truth
+        s = (mem_stream *)file;
 
-    if (s == NULL) return Z_STREAM_ERROR;
+        if (s == NULL)
+                return Z_STREAM_ERROR;
 
     return memTell(s->file);
 }
@@ -704,16 +731,16 @@ z_off_t ZEXPORT memgzseek(gzFile file, z_off_t off, int whence)
 {
 	char buf[80];
 
-	if(whence != SEEK_CUR) {
+        if (whence != SEEK_CUR) {
 		fputs("FIXME: memgzio does not support seeking\n", stderr);
 		exit(1);
 	}
 
 	// this is inefficient, but the best I can do without actually reading
 	// the above code
-	while(off > 0) {
+        while (off > 0) {
 		int r = memgzread(file, buf, off > 80 ? 80 : off);
-		if(r <= 0)
+                if (r <= 0)
 			return -1;
 		off -= r;
 	}

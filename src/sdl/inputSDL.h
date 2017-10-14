@@ -18,7 +18,7 @@
 #ifndef VBAM_SDL_INPUT_H
 #define VBAM_SDL_INPUT_H
 
-#include <SDL.h>
+#include "SDL.h"
 
 enum EKey {
     KEY_LEFT,
@@ -47,14 +47,12 @@ enum EKey {
     KEY_P2_BUTTON_R
 };
 
-enum EPad {
-	PAD_MAIN,
-	PAD_1 = PAD_MAIN,
-	PAD_2,
-	PAD_3,
-	PAD_4,
-	PAD_DEFAULT
-};
+enum EPad { PAD_MAIN,
+    PAD_1 = PAD_MAIN,
+    PAD_2,
+    PAD_3,
+    PAD_4,
+    PAD_DEFAULT };
 
 /**
  * Init the joysticks needed by the keymap. Verify that the keymap is compatible
@@ -103,14 +101,14 @@ bool inputGetAutoFire(EKey key);
  * Update the emulated pads state with a SDL event
  * @param SDL_Event An event that has just occured
  */
-void inputProcessSDLEvent(const SDL_Event &event);
+void inputProcessSDLEvent(const SDL_Event& event);
 
 /**
  * Get the keymap code corresponding to a SDL event
  * @param SDL_Event An event that has just occured
  * @return Keymap code
  */
-uint32_t inputGetEventCode(const SDL_Event &event);
+uint32_t inputGetEventCode(const SDL_Event& event);
 
 /**
  * Read the state of an emulated joypad

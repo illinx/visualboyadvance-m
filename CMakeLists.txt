@@ -1,7 +1,14 @@
 # The project's name is VBA-M it uses C and C++ code
 PROJECT(VBA-M C CXX)
 
-cmake_minimum_required( VERSION 2.6.0 )
+cmake_minimum_required( VERSION 2.8.12 )
+
+IF(CMAKE_BUILD_TYPE STREQUAL "")
+    SET(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build Type" FORCE)
+ENDIF()
+
+SET(ALL_TARGETS fex visualboyadvance-m vbamcore vbam)
+
 if( COMMAND cmake_policy )
     cmake_policy( SET CMP0003 NEW )
     cmake_policy( SET CMP0005 OLD )
@@ -10,20 +17,77 @@ SET( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeScripts )
 #Output all binaries at top level
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR})
 
-option( ENABLE_SDL "Build the SDL port" ON )
-option( ENABLE_GTK "Build the GTK+ GUI" OFF )
-option( ENABLE_GTK3 "Build the GTK+ GUI" OFF )
+option( ENABLE_SDL "Build the SDL port" OFF )
 option( ENABLE_WX "Build the wxWidgets port" ON )
 option( ENABLE_DEBUGGER "Enable the debugger" ON )
 option( ENABLE_NLS "Enable translations" ON )
-option( ENABLE_ASM_CORE "Enable x86 ASM CPU cores" OFF )
-option( ENABLE_ASM_SCALERS "Enable x86 ASM graphic filters" OFF )
-option( ENABLE_LINK "Enable GBA linking functionality" OFF )
-option( ENABLE_LIRC "Enable LIRC support" OFF )
-option( ENABLE_FFMPEG "Enable ffmpeg A/V recording" OFF )
+
+SET(ASM_DEFAULT OFF)
+
+IF(NOT CMAKE_SYSTEM_PROCESSOR)
+    IF(NOT CMAKE_TOOLCHAIN_FILE AND CMAKE_HOST_SYSTEM_PROCESSOR)
+        SET(CMAKE_SYSTEM_PROCESSOR ${CMAKE_HOST_SYSTEM_PROCESSOR})
+    ELSEIF(CMAKE_TOOLCHAIN_FILE MATCHES mxe)
+        IF(CMAKE_TOOLCHAIN_FILE MATCHES "i[3-9]86")
+            SET(CMAKE_SYSTEM_PROCESSOR i686)
+        ELSE()
+            SET(CMAKE_SYSTEM_PROCESSOR x86_64)
+        ENDIF()
+    ENDIF()
+ENDIF()
+
+# turn asm on by default on 32bit x86
+IF(CMAKE_SYSTEM_PROCESSOR MATCHES "[xX]86|i[3-9]86|[aA][mM][dD]64")
+    IF(CMAKE_C_SIZEOF_DATA_PTR EQUAL 4) # 32 bit
+        SET(ASM_DEFAULT ON)
+        SET(X86_32 ON)
+    ELSE()
+        SET(AMD64 ON)
+    ENDIF()
+ENDIF()
+
+OPTION(ENABLE_ASM "Enable x86 ASM related options" ${ASM_DEFAULT})
+
+# The ARM ASM core seems to be very buggy, see #98 and #54. Default to it being
+# OFF for the time being, until it is either fixed or replaced.
+option( ENABLE_ASM_CORE "Enable x86 ASM CPU cores" OFF)
+
+IF(ENABLE_ASM_CORE)
+    MESSAGE(WARNING "!!!!!! The x86 ASM cores are considered buggy and dangerous, use at your own risk. !!!!!!")
+ENDIF()
+
+SET(ASM_SCALERS_DEFAULT ${ENABLE_ASM})
+SET(MMX_DEFAULT ${ENABLE_ASM})
+
+option( ENABLE_ASM_SCALERS "Enable x86 ASM graphic filters" ${ASM_SCALERS_DEFAULT})
+
 if(ENABLE_ASM_SCALERS)
-    option( ENABLE_MMX "Enable MMX" OFF )
+    option( ENABLE_MMX "Enable MMX" ${MMX_DEFAULT})
 endif(ENABLE_ASM_SCALERS)
+
+option( ENABLE_LINK "Enable GBA linking functionality" ON )
+option( ENABLE_LIRC "Enable LIRC support" OFF )
+
+SET(FFMPEG_DEFAULT ON)
+
+IF(WIN32 AND NOT (MINGW AND MSYS))
+    SET(FFMPEG_DEFAULT OFF)
+ENDIF()
+
+option(ENABLE_FFMPEG "Enable ffmpeg A/V recording" ${FFMPEG_DEFAULT})
+
+SET(LTO_DEFAULT ON)
+
+IF(WIN32)
+    SET(LTO_DEFAULT OFF)
+ENDIF()
+
+OPTION(ENABLE_LTO "Compile with Link Time Optimization (gcc and clang only)" ${LTO_DEFAULT})
+
+if(MSVC)
+    ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
+endif(MSVC)
+
 option( ENABLE_GBA_LOGGING "Enable extended GBA logging" ON )
 if( ENABLE_GBA_LOGGING )
    ADD_DEFINITIONS (-DGBA_LOGGING )
@@ -59,63 +123,63 @@ IF( NOT VERSION )
     endif(EXISTS ${PROJECT_SOURCE_DIR}/.git)
 ENDIF( NOT VERSION )
 
-
-
-# Fill in SDLMAIN_LIBRARY on OS X manually to avoid using SDLMain.m
-# OS X users will have to compile and install SDL from source.
-if( APPLE AND ENABLE_SDL )
-    ADD_DEFINITIONS (-DwxMAC_USE_CORE_GRAPHICS )
-    SET(SDL2MAIN_LIBRARY "-lSDL2main")
-endif( APPLE AND ENABLE_SDL )
-
-# Add support for MacPorts and Homebrew on OS X
-# and ObjectiveC code
-IF(APPLE)
-    SET(CMAKE_INCLUDE_PATH "${CMAKE_INCLUDE_PATH};/usr/local/include;/opt/local/include")
-    SET(CMAKE_LIBRARY_PATH "${CMAKE_LIBRARY_PATH};/usr/local/lib;/opt/local/lib")
-    SET(CMAKE_PROGRAM_PATH "${CMAKE_PROGRAM_PATH};/usr/local/bin;/opt/local/bin")
-
-    link_directories("/usr/local/lib")
-    include_directories("/usr/local/include")
-
-    link_directories("/opt/local/lib")
-    include_directories("/opt/local/include")
-
-    # and compile as Objective-C++ for ObjectiveC #ifdefs
-    SET(CMAKE_CXX_COMPILE_OBJECT "<CMAKE_CXX_COMPILER> -x objective-c++ <DEFINES> <INCLUDES> <FLAGS> -o <OBJECT> -c <SOURCE>")
+IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    ADD_DEFINITIONS(-DDEBUG)
+ELSE()
+    ADD_DEFINITIONS(-DNDEBUG)
 ENDIF()
 
+# hack for ninja in msys2
+IF(WIN32 AND CMAKE_GENERATOR STREQUAL Ninja AND (NOT $ENV{MSYSTEM} STREQUAL ""))
+    SET(MSYS ON)
+ENDIF()
+
+# Add support for Homebrew, MacPorts and Fink on OS X
+IF(APPLE)
+    INCLUDE(MacPackageManagers)
+ENDIF(APPLE)
+
 # We do not support amd64 asm yet
-IF((ENABLE_ASM_CORE OR ENABLE_ASM_SCALERS OR ENABLE_MMX)
-   AND CMAKE_SYSTEM_PROCESSOR MATCHES "[xX]86|[aA][mM][dD]64|[xX]64"
-   AND CMAKE_C_SIZEOF_DATA_PTR EQUAL 8)
+IF(AMD64 AND (ENABLE_ASM_CORE OR ENABLE_ASM_SCALERS OR ENABLE_MMX))
     MESSAGE(FATAL_ERROR "The options ASM_CORE, ASM_SCALERS and MMX are not supported on AMD64 yet.")
 ENDIF()
 
-# Check for nasm
-if( ENABLE_ASM_SCALERS )
-    IF(EXISTS "/usr/local/bin/nasm")
-        SET(CMAKE_ASM_NASM_COMPILER "/usr/local/bin/nasm")
-    ELSEIF(EXISTS "/opt/local/bin/nasm")
-        SET(CMAKE_ASM_NASM_COMPILER "/opt/local/bin/nasm")
-    ELSE()
-        SET(CMAKE_ASM_NASM_COMPILER "/usr/bin/nasm")
-    ENDIF()
+IF(ENABLE_ASM_CORE OR ENABLE_ASM_SCALERS)
     ENABLE_LANGUAGE(ASM_NASM)
-endif( ENABLE_ASM_SCALERS )
+    SET(ASM_ENABLED ON)
+ENDIF()
 
 # Look for some dependencies using CMake scripts
-FIND_PACKAGE ( ZLIB REQUIRED )
-FIND_PACKAGE ( PNG REQUIRED )
-FIND_PACKAGE ( OpenGL REQUIRED )
-FIND_PACKAGE ( SDL2 REQUIRED )
+FIND_PACKAGE(ZLIB REQUIRED)
+FIND_PACKAGE(OpenGL REQUIRED)
+
+# TODO: make static on mac and fedora cross-compiles
+FIND_PACKAGE(PNG REQUIRED)
+
+IF(APPLE AND NOT MACPORTS)
+    SET(SDL2_STATIC ON)
+ENDIF()
+
+IF(EXISTS /etc/redhat-release)
+    SET(FEDORA_HOST ON)
+ENDIF()
+
+IF(WINDOWS AND FEDORA_HOST)
+    SET(SDL2_STATIC ON)
+ENDIF()
+
+FIND_PACKAGE(SDL2 REQUIRED)
+ADD_DEFINITIONS(${SDL2_DEFINITIONS})
 
 if( ENABLE_LINK )
-    if( WIN32 )
+    # msys2 does not have static sfml libs atm
+    # while on mxe we use static libs
+    if(WIN32 AND ((NOT (MINGW AND MSYS)) OR CMAKE_TOOLCHAIN_FILE MATCHES mxe))
         set(SFML_STATIC_LIBRARIES TRUE)
-    endif( WIN32 )
-    FIND_PACKAGE ( SFML 2 COMPONENTS network system )
+    endif()
+    FIND_PACKAGE ( SFML 2 COMPONENTS network system REQUIRED )
 endif( ENABLE_LINK )
+
 # set the standard libraries all ports use
 SET(VBAMCORE_LIBS
     vbamcore
@@ -151,13 +215,13 @@ ENDIF( NOT DATA_INSTALL_DIR )
 SET( PKGDATADIR ${CMAKE_INSTALL_PREFIX}/${DATA_INSTALL_DIR} )
 
 # Set the configuration file location
-IF( NOT SYSCONFDIR )
-    SET( SYSCONFDIR "/etc" )
-ENDIF( NOT SYSCONFDIR )
+IF( NOT SYSCONF_INSTALL_DIR )
+    SET( SYSCONF_INSTALL_DIR "/etc" )
+ENDIF( NOT SYSCONF_INSTALL_DIR )
 
 # C defines
-ADD_DEFINITIONS (-DHAVE_NETINET_IN_H -DHAVE_ARPA_INET_H -DHAVE_ZLIB_H -DFINAL_VERSION -DSDL -DUSE_OPENGL -DSYSCONFDIR='"${SYSCONFDIR}"' -DWITH_LIRC='${WITHLIRC}')
-ADD_DEFINITIONS (-DVERSION='"${VERSION}"' -DPKGDATADIR='"${PKGDATADIR}"' -DPACKAGE='')
+ADD_DEFINITIONS (-DHAVE_NETINET_IN_H -DHAVE_ARPA_INET_H -DHAVE_ZLIB_H -DFINAL_VERSION -DSDL -DUSE_OPENGL -DSYSCONF_INSTALL_DIR=\\\""${SYSCONF_INSTALL_DIR}"\\\" -DWITH_LIRC=${WITHLIRC})
+ADD_DEFINITIONS (-DVERSION=\\\""${VERSION}"\\\" -DPKGDATADIR=\\\""${PKGDATADIR}"\\\" -DPACKAGE=)
 
 if( ENABLE_LINK )
     # IPC linking code needs sem_timedwait which can be either in librt or pthreads
@@ -198,7 +262,7 @@ ENDIF( NOT ENABLE_ASM_CORE )
 if( ENABLE_NLS )
     SET( LOCALEDIR ${CMAKE_INSTALL_PREFIX}/share/locale )
     ADD_DEFINITIONS ( -DENABLE_NLS )
-    ADD_DEFINITIONS ( -DLOCALEDIR=\\\"${LOCALEDIR}\\\" )
+    ADD_DEFINITIONS ( -DLOCALEDIR=\\\""${LOCALEDIR}"\\\" )
     # for now, only GBALink.cpp uses gettext() directly
     IF(APPLE)
         # use Homebrew gettext if available
@@ -209,45 +273,170 @@ if( ENABLE_NLS )
         ENDIF()
     ENDIF()
     IF(ENABLE_LINK)
-        FIND_PATH(LIBINTL_INC libintl.h )
-        FIND_LIBRARY(LIBINTL_LIB intl )
-	IF(LIBINTL_LIB)
+        FIND_PATH(LIBINTL_INC libintl.h)
+        FIND_LIBRARY(LIBINTL_LIB intl)
+        FIND_LIBRARY(LIBICONV_LIB iconv)
+        IF(LIBINTL_LIB)
             SET(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ${LIBINTL_LIB})
             SET(VBAMCORE_LIBS ${VBAMCORE_LIBS} ${LIBINTL_LIB})
-	ENDIF(LIBINTL_LIB)
+        ENDIF(LIBINTL_LIB)
+        IF(LIBICONV_LIB)
+            SET(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ${LIBICONV_LIB})
+            SET(VBAMCORE_LIBS ${VBAMCORE_LIBS} ${LIBICONV_LIB})
+        ENDIF(LIBICONV_LIB)
         INCLUDE(CheckFunctionExists)
         CHECK_FUNCTION_EXISTS(gettext GETTEXT_FN)
-        IF(NOT LIBINTL_INC OR NOT GETTEXT_FN)
+        IF(NOT (LIBINTL_INC OR GETTEXT_FN))
             MESSAGE(FATAL_ERROR "NLS requires libintl/gettext")
-        ENDIF(NOT LIBINTL_INC OR NOT GETTEXT_FN)
+        ENDIF()
         INCLUDE_DIRECTORIES(${LIBINTL_INC})
     ENDIF(ENABLE_LINK)
 endif( ENABLE_NLS )
 
-# Compiler flags
+# Win32 deps submodule
 IF(WIN32)
-    SET( CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I$(CMAKE_SOURCE_DIR)/src/filters/hq/asm/ -O1 -w-orphan-labels")
-ELSEIF(APPLE)
-    SET( CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I$(CMAKE_SOURCE_DIR)/src/filters/hq/asm/ -O1 -DMACHO -w-orphan-labels")
+    IF(NOT EXISTS "${CMAKE_SOURCE_DIR}/dependencies/mingw-xaudio/include" AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+        MESSAGE(FATAL_ERROR "Please pull in git submodules, e.g.\nrun: git submodule update --init --recursive")
+    ENDIF()
+
+    INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/dependencies/mingw-xaudio/include")
+
+    IF(MSVC)
+        SET(DEPS_MSVC "${CMAKE_SOURCE_DIR}/dependencies/msvc")
+        INCLUDE_DIRECTORIES("${DEPS_MSVC}") # for GL/glext.h and getopt.h
+    ENDIF()
+ENDIF()
+
+# Compiler flags
+
+IF(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID STREQUAL Clang)
+    SET(LTO_FLAG "")
+    IF(ENABLE_LTO)
+        IF(CMAKE_COMPILER_IS_GNUCXX)
+            SET(LTO_FLAG -flto=10)
+        ELSE()
+            SET(LTO_FLAG -flto)
+        ENDIF()
+    ENDIF(ENABLE_LTO)
+
+    # common optimization flags
+    IF(NOT (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL Clang AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.3))
+        SET(MY_C_OPT_FLAGS -O2 -mtune=generic -fomit-frame-pointer ${LTO_FLAG})
+    ELSE()
+        # LTO and -fomit-frame-pointer generate broken binaries on Lion with XCode 4.2 tools
+        SET(MY_C_OPT_FLAGS -O2 -mtune=generic)
+    ENDIF()
+
+    # common debug flags
+    IF(CMAKE_COMPILER_IS_GNUCXX)
+        SET(MY_C_DBG_FLAGS -ggdb3 -Og)
+    ELSE()
+        SET(MY_C_DBG_FLAGS -g)
+    ENDIF()
+
+    # common flags
+    SET(MY_C_FLAGS -pipe -Wformat -Wformat-security -D_FORTIFY_SOURCE=2 -feliminate-unused-debug-types)
+
+    IF(NOT WIN32)
+        SET(MY_C_FLAGS ${MY_C_FLAGS} -fPIC)
+    ENDIF()
+
+    INCLUDE(CheckCXXCompilerFlag)
+
+    # check if ssp flags are supported for this version of gcc
+    IF(CMAKE_COMPILER_IS_GNUCXX)
+        CHECK_CXX_COMPILER_FLAG(-fstack-protector-strong  F_STACK_PROTECTOR_STRONG_FLAG)
+
+        IF(F_STACK_PROTECTOR_STRONG_FLAG)
+            SET(MY_C_FLAGS ${MY_C_FLAGS} -fstack-protector-strong)
+
+            CHECK_CXX_COMPILER_FLAG("--param ssp-buffer-size=4" SSP_BUFFER_SIZE_FLAG)
+
+            IF(SSP_BUFFER_SIZE_FLAG)
+                # we do not add it to MY_C_FLAGS because this breaks things like CMAKE_REQUIRED_LIBRARIES
+                # which misinterpret compiler flags without leading dashes
+                ADD_COMPILE_OPTIONS(--param ssp-buffer-size=4)
+            ENDIF()
+        ENDIF()
+    ENDIF()
+
+    IF(MINGW)
+        SET(MY_C_FLAGS ${MY_C_FLAGS} -static-libgcc -static-libstdc++)
+    ENDIF(MINGW)
+
+    IF(CMAKE_BUILD_TYPE STREQUAL Debug)
+        SET(MY_C_FLAGS   ${MY_C_FLAGS}   ${MY_C_DBG_FLAGS} -Wall -Wextra)
+    ELSE()
+        SET(MY_C_FLAGS   ${MY_C_FLAGS}   ${MY_C_OPT_FLAGS} -Wno-error)
+    ENDIF()
+
+    FOREACH(C_COMPILE_FLAG ${MY_C_FLAGS})
+        ADD_COMPILE_OPTIONS(${C_COMPILE_FLAG})
+    ENDFOREACH()
+
+    SET(MY_CXX_FLAGS -std=gnu++11 -fpermissive -fexceptions)
+
+    FOREACH(ARG ${MY_CXX_FLAGS})
+        SET(MY_CXX_FLAGS_STR "${MY_CXX_FLAGS_STR} ${ARG}")
+    ENDFOREACH()
+
+    # These must be set for C++ only, and we can't use generator expressions in
+    # ADD_COMPILE_OPTIONS because that's a cmake 3.3 feature and we need 2.8.12
+    # compat for Ubuntu 14.
+    STRING(REGEX REPLACE "<FLAGS>" "<FLAGS> ${MY_CXX_FLAGS_STR} " CMAKE_CXX_COMPILE_OBJECT ${CMAKE_CXX_COMPILE_OBJECT})
+
+    FOREACH(ARG ${MY_C_FLAGS})
+        SET(MY_C_FLAGS_STR "${MY_C_FLAGS_STR} ${ARG}")
+    ENDFOREACH()
+
+    # need all flags for linking, because of -flto etc.
+    SET(CMAKE_C_LINK_EXECUTABLE   "${CMAKE_C_LINK_EXECUTABLE}   ${MY_C_FLAGS_STR}")
+    SET(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} ${MY_C_FLAGS_STR}")
+
+    # for the gcc -fstack-protector* flags we need libssp
+    # we also have to use the gcc- binutils for LTO to work
+    IF(CMAKE_COMPILER_IS_GNUCXX)
+        IF(ENABLE_LTO)
+            INCLUDE(UseGCCBinUtilsWrappers)
+        ENDIF(ENABLE_LTO)
+
+        IF(WIN32)
+            SET(SSP_STATIC ON)
+        ENDIF(WIN32)
+
+        FIND_PACKAGE(SSP)
+
+        IF(SSP_LIBRARY)
+            SET(MY_C_LINKER_FLAGS ${MY_C_LINKER_FLAGS} ${SSP_LIBRARY})
+        ENDIF(SSP_LIBRARY)
+
+        SET(MY_C_LINKER_FLAGS ${MY_C_LINKER_FLAGS} -Wl,-allow-multiple-definition)
+    ENDIF()
+
+    # set linker flags
+    FOREACH(ARG ${MY_C_LINKER_FLAGS})
+        SET(MY_C_LINKER_FLAGS_STR "${MY_C_LINKER_FLAGS_STR} ${ARG}")
+    ENDFOREACH()
+
+    SET(CMAKE_C_LINK_EXECUTABLE   "${CMAKE_C_LINK_EXECUTABLE}   ${MY_C_LINKER_FLAGS_STR}")
+    SET(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} ${MY_C_LINKER_FLAGS_STR}")
+ENDIF()
+
+# Assembler flags
+
+IF(ASM_ENABLED)
+    STRING(REGEX REPLACE "<FLAGS>" "-I${CMAKE_SOURCE_DIR}/src/filters/hq/asm/ -O1 -w-orphan-labels" CMAKE_ASM_NASM_COMPILE_OBJECT ${CMAKE_ASM_NASM_COMPILE_OBJECT})
+ENDIF(ASM_ENABLED)
+
+IF(APPLE)
+    ADD_DEFINITIONS(-DMACHO)
 ELSEIF("${CMAKE_SYSTEM}" MATCHES "Linux")
-    SET( CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -I$(CMAKE_SOURCE_DIR)/src/filters/hq/asm/ -O1 -DELF -w-orphan-labels")
+    ADD_DEFINITIONS(-DELF)
 ENDIF()
 
-IF(CMAKE_SYSTEM_PROCESSOR MATCHES "[xX]86|[aA][mM][dD]64|[xX]64" AND CMAKE_C_SIZEOF_DATA_PTR EQUAL 8)
-    ADD_DEFINITIONS( -D__AMD64__ )
-    SET(CMAKE_ASM_NASM_FLAGS "${CMAKE_ASM_NASM_FLAGS} -D__AMD64__")
+IF(AMD64)
+    ADD_DEFINITIONS(-D__AMD64__)
 ENDIF()
-
-SET( CMAKE_C_FLAGS_RELEASE "-O3")
-SET( CMAKE_CXX_FLAGS_RELEASE "-O3")
-SET( CMAKE_C_FLAGS_DEBUG "-g -Wall")
-SET( CMAKE_CXX_FLAGS_DEBUG "-g -Wall")
-
-if (WIN32)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static-libgcc -static -I./dependencies/include")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++ -static -I./dependencies/include")
-endif (WIN32)
-
 
 add_subdirectory (fex)
 
@@ -261,9 +450,37 @@ SET(SRC_MAIN
     src/common/SoundSDL.cpp
 )
 
+if(MSVC)
+	SET(SRC_MAIN ${SRC_MAIN} "dependencies/msvc/getopt.c")
+endif(MSVC)
+
+SET(HDR_MAIN
+    src/AutoBuild.h
+    src/System.h
+    src/Util.h
+    src/version.h
+    src/common/array.h
+    src/common/ConfigManager.h
+    src/common/dictionary.h
+    src/common/iniparser.h
+    src/common/memgzio.h
+    src/common/Port.h
+    src/common/SoundDriver.h
+    src/common/SoundSDL.h
+)
+
+if(MSVC)
+	SET(HDR_MAIN ${HDR_MAIN} "dependencies/msvc/getopt.h")
+endif(MSVC)
+
 if(ENABLE_FFMPEG)
     SET(SRC_MAIN ${SRC_MAIN} src/common/ffmpeg.cpp)
+    SET(HDR_MAIN ${HDR_MAIN} src/common/ffmpeg.h)
 endif(ENABLE_FFMPEG)
+
+if(ENABLE_NLS)
+    SET(HDR_MAIN ${HDR_MAIN} src/NLS.h)
+endif(ENABLE_NLS)
 
 SET(SRC_GBA
     src/gba/agbprint.cpp
@@ -295,6 +512,29 @@ SET(SRC_GBA
     src/gba/Sram.cpp
 )
 
+SET(HDR_GBA
+    src/gba/agbprint.h
+    src/gba/bios.h
+    src/gba/BreakpointStructures.h
+    src/gba/Cheats.h
+    src/gba/CheatSearch.h
+    src/gba/debugger-expr-yacc.hpp
+    src/gba/EEprom.h
+    src/gba/ereader.h
+    src/gba/Flash.h
+    src/gba/GBA.h
+    src/gba/GBAcpu.h
+    src/gba/gbafilter.h
+    src/gba/GBAGfx.h
+    src/gba/GBAinline.h
+    src/gba/GBALink.h
+    src/gba/GBASockClient.h
+    src/gba/Globals.h
+    src/gba/RTC.h
+    src/gba/Sound.h
+    src/gba/Sram.h
+)
+
 SET(SRC_GB
     src/gb/GB.cpp
     src/gb/gbCheats.cpp
@@ -307,6 +547,18 @@ SET(SRC_GB
     src/gb/gbSound.cpp
 )
 
+SET(HDR_GB
+    src/gb/gb.h
+    src/gb/gbCheats.h
+    src/gb/gbCodes.h
+    src/gb/gbCodesCB.h
+    src/gb/gbGlobals.h
+    src/gb/gbMemory.h
+    src/gb/gbPrinter.h
+    src/gb/gbSGB.h
+    src/gb/gbSound.h
+)
+
 SET(SRC_APU
     src/apu/Blip_Buffer.cpp
     src/apu/Effects_Buffer.cpp
@@ -314,6 +566,17 @@ SET(SRC_APU
     src/apu/Gb_Apu_State.cpp
     src/apu/Gb_Oscs.cpp
     src/apu/Multi_Buffer.cpp
+)
+
+SET(HDR_APU
+    src/apu/blargg_common.h #Unused(?) but in the VS projects
+    src/apu/blargg_config.h #Unused(?) but in the VS projects
+    src/apu/blargg_source.h
+    src/apu/Blip_Buffer.h
+    src/apu/Effects_Buffer.h
+    src/apu/Gb_Apu.h
+    src/apu/Gb_Oscs.h
+    src/apu/Multi_Buffer.h
 )
 
 SET(SRC_SDL
@@ -324,6 +587,14 @@ SET(SRC_SDL
     src/sdl/expr.cpp
     src/sdl/exprNode.cpp
     src/sdl/expr-lex.cpp
+)
+
+SET(HDR_SDL
+    src/sdl/filters.h
+    src/sdl/text.h
+    src/sdl/inputSDL.h
+    src/sdl/expr.cpp.h
+    src/sdl/exprNode.h
 )
 
 SET(SRC_FILTERS
@@ -339,8 +610,23 @@ SET(SRC_FILTERS
     src/filters/xBRZ/xbrz.cpp
 )
 
+SET(HDR_FILTERS
+    src/filters/hq2x.h
+    src/filters/interp.h
+    src/filters/lq2x.h
+    src/filters/xBRZ/config.h
+    src/filters/xBRZ/xbrz.h
+)
+
 SET(SRC_HQ_C
     src/filters/hq/c/hq_implementation.cpp
+)
+
+SET(HDR_HQ_C
+    src/filters/hq/c/hq3x_pattern.h
+    src/filters/hq/c/hq4x_pattern.h
+    src/filters/hq/c/hq_base.h
+    src/filters/hq/c/hq_shared.h
 )
 
 SET(SRC_HQ_ASM
@@ -353,8 +639,12 @@ SET(SRC_HQ_ASM
 
 if( ENABLE_ASM_SCALERS )
     SET(SRC_FILTERS ${SRC_FILTERS} ${SRC_HQ_ASM})
+    IF(ENABLE_MMX)
+        SET(SRC_FILTERS ${SRC_FILTERS} src/filters/2xSaImmx.asm)
+    ENDIF(ENABLE_MMX)
 else( ENABLE_ASM_SCALERS )
     SET(SRC_FILTERS ${SRC_FILTERS} ${SRC_HQ_C})
+    SET(HDR_FILTERS ${HDR_FILTERS} ${HDR_HQ_C})
     ADD_DEFINITIONS ( -DNO_ASM )
 endif( ENABLE_ASM_SCALERS )
 
@@ -363,6 +653,11 @@ if( ENABLE_DEBUGGER )
         src/gba/armdis.cpp
         src/gba/elf.cpp
         src/gba/remote.cpp
+    )
+    SET(HDR_DEBUGGER
+        src/gba/armdis.h
+        src/gba/elf.h
+        src/gba/remote.h
     )
 endif( ENABLE_DEBUGGER )
 
@@ -384,22 +679,33 @@ ADD_LIBRARY (
     STATIC
     ${PROJECT_SRCS}
     ${SRC_MAIN}
+    ${HDR_MAIN}
     ${SRC_GBA}
+    ${HDR_GBA}
     ${SRC_GB}
+    ${HDR_GB}
     ${SRC_APU}
+    ${HDR_APU}
     ${SRC_FILTERS}
+    ${HDR_FILTERS}
     ${SRC_DEBUGGER}
+    ${HDR_DEBUGGER}
 )
+set_property(TARGET vbamcore PROPERTY CXX_STANDARD 11)
+set_property(TARGET vbamcore PROPERTY CXX_STANDARD_REQUIRED ON)
 
 IF( ENABLE_SDL )
     ADD_EXECUTABLE (
         vbam
         WIN32
         ${SRC_SDL}
+        ${HDR_SDL}
     )
+    set_property(TARGET vbam PROPERTY CXX_STANDARD 11)
+    set_property(TARGET vbam PROPERTY CXX_STANDARD_REQUIRED ON)
 
     IF( WIN32 )
-        SET( WIN32_LIBRARIES wsock32 )
+        SET( WIN32_LIBRARIES wsock32 ws2_32 )
     ENDIF( WIN32 )
 
     IF( ENABLE_LIRC )
@@ -412,45 +718,50 @@ IF( ENABLE_SDL )
         ${WIN32_LIBRARIES}
         ${LIRC_CLIENT_LIBRARY}
     )
-	IF( WIN32 )
-		INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/visualboyadvance-m${CMAKE_EXECUTABLE_SUFFIX} DESTINATION bin)
-	ELSE( WIN32 )
-		INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/vbam DESTINATION bin)
-	ENDIF( WIN32 )
-		INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sdl/vbam.cfg-example
-				DESTINATION ${CMAKE_INSTALL_PREFIX}/${SYSCONFDIR}
-				RENAME vbam.cfg)
-ENDIF( ENABLE_SDL )
+    INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/vbam DESTINATION bin)
 
-IF( ENABLE_GTK OR ENABLE_GTK3 )
-	add_subdirectory (src/gtk)
-ENDIF( ENABLE_GTK OR ENABLE_GTK3 )
+    IF( WIN32 )
+        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sdl/vbam.cfg-example
+                DESTINATION ${CMAKE_INSTALL_PREFIX}/${SYSCONF_INSTALL_DIR}
+                RENAME vbam.cfg)
+    ELSE( WIN32 )
+        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sdl/vbam.cfg-example
+                DESTINATION ${SYSCONF_INSTALL_DIR}
+                RENAME vbam.cfg)
+    ENDIF( WIN32 )
+ENDIF( ENABLE_SDL )
 
 IF( ENABLE_WX )
     add_subdirectory(src/wx)
+    INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/visualboyadvance-m${CMAKE_EXECUTABLE_SUFFIX} DESTINATION bin)
 ENDIF( ENABLE_WX )
 
-if( ENABLE_GTK OR ENABLE_GTK3 OR ENABLE_WX )
+if( ENABLE_WX )
     # Native Language Support
     if( ENABLE_NLS )
         add_subdirectory(po)
     endif( ENABLE_NLS )
-endif( ENABLE_GTK OR ENABLE_GTK3 OR ENABLE_WX )
+endif( ENABLE_WX )
 INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/vba-over.ini DESTINATION ${DATA_INSTALL_DIR})
-IF(NOT APPLE)
-    INSTALL(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk/icons/ DESTINATION share/icons/hicolor PATTERN ".svn" EXCLUDE)
-ENDIF(NOT APPLE)
 
 # manual pages
 IF( UNIX )
-    INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/vbam.1 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man1)
-    IF( ENABLE_GTK )
-        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/gvbam.1 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man1)
-    ENDIF( ENABLE_GTK )
+    IF( ENABLE_SDL )
+        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/vbam.6 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man6)
+    ENDIF( ENABLE_SDL )
     IF( ENABLE_WX )
-        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/wxvbam.1 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man1)
+        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/visualboyadvance-m.6 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man6)
     ENDIF( ENABLE_WX )
 ENDIF( UNIX )
+
+# linux data and icon files
+IF( NOT WIN32 AND NOT APPLE )
+    IF( ENABLE_WX )
+        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/wx/wxvbam.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
+        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/wx/wxvbam.appdata.xml DESTINATION ${CMAKE_INSTALL_PREFIX}/share/appdata)
+        INSTALL(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/wx/icons/sizes/ DESTINATION share/icons/hicolor)
+    ENDIF( ENABLE_WX )
+ENDIF( NOT WIN32 AND NOT APPLE )
 
 SET(CPACK_GENERATOR "ZIP")
 set(CPACK_SOURCE_GENERATOR "TGZ")

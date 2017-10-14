@@ -9,3 +9,10 @@ src/wx/wxvbam.xrs
 *.tlog
 project/vs2010_mfc/Win32/
 *.log
+build*
+
+# vim swap files
+*.sw?
+
+# mac finder crap
+*.DS_Store
