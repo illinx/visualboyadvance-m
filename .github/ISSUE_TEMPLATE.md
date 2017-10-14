@@ -6,6 +6,14 @@
 
 ### Steps to reproduce the behavior
 
+### Crash bugs
+
+If this is a crash bug, and you have the time and inclination, please provide a
+symblic backtrace.
+
+Instructions for doing so are
+[here](https://github.com/visualboyadvance-m/visualboyadvance-m/blob/master/README.md#reporting-crash-bugs).
+
 ### ROM details
 
 Which games are affected by the issue (please state if GBA or GB game):
@@ -14,7 +22,7 @@ Which games, if any, are NOT affected by the issue (please state if GBA or GB ga
 
 ### Option details
 
-Video driver (simple, opengl or cairo):
+Video driver (simple, opengl):
 
 Sound driver (directsound, xaudio, openal, SDL):
 

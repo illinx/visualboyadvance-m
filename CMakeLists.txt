@@ -9,11 +9,12 @@ ENDIF()
 
 SET(ALL_TARGETS fex visualboyadvance-m vbamcore vbam)
 
-if( COMMAND cmake_policy )
-    cmake_policy( SET CMP0003 NEW )
-    cmake_policy( SET CMP0005 OLD )
-endif( COMMAND cmake_policy )
-SET( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeScripts )
+if(COMMAND cmake_policy)
+    cmake_policy(SET CMP0003 NEW) # link to full path of libs
+    cmake_policy(SET CMP0005 NEW) # escapes in add_definitions
+endif(COMMAND cmake_policy)
+
+SET( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake )
 #Output all binaries at top level
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR})
 
@@ -78,7 +79,8 @@ option(ENABLE_FFMPEG "Enable ffmpeg A/V recording" ${FFMPEG_DEFAULT})
 
 SET(LTO_DEFAULT ON)
 
-IF(WIN32)
+IF(WIN32 AND CMAKE_COMPILER_IS_GNUCXX AND AMD64)
+    # lto produces buggy binaries for 64 bit win32
     SET(LTO_DEFAULT OFF)
 ENDIF()
 
@@ -101,27 +103,26 @@ if( NOT ENABLE_DEBUGGER AND ENABLE_SDL )
         message( SEND_ERROR "The SDL port can't be built without debugging support" )
 endif( NOT ENABLE_DEBUGGER AND ENABLE_SDL )
 
-# Set the version number with -DVERSION=X.X.X-uber
-IF( NOT VERSION )
-#Will need to change this over to git
-    SET( VERSION "https://github.com/visualboyadvance-m/visualboyadvance-m" )
+find_package(Git)
+if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    include(GitTagVersion)
+    git_version(VERSION REVISION VERSION_RELEASE)
 
-    #openmw does this
-    if(EXISTS ${PROJECT_SOURCE_DIR}/.git)
-        if(NOT EXISTS ${PROJECT_SOURCE_DIR}/.git/shallow)
-            find_package(Git)
-            if(GIT_FOUND)
-                include(GetGitRevisionDescription)
-                get_git_head_revision(REFSPEC COMMITHASH)
-                SET( VERSION "GIT Commit: " ${COMMITHASH} )
-            else(GIT_FOUND)
-                message(WARNING "Git executable not found")
-            endif(GIT_FOUND)
-        else(NOT EXISTS ${PROJECT_SOURCE_DIR}/.git/shallow)
-            message(STATUS "Shallow Git clone detected, not attempting to retrieve version info")
-        endif(NOT EXISTS ${PROJECT_SOURCE_DIR}/.git/shallow)
-    endif(EXISTS ${PROJECT_SOURCE_DIR}/.git)
-ENDIF( NOT VERSION )
+    # only use the plugin to tie the configure state to the sha to force rebuilds
+    # of files that depend on version.h
+    include(GetGitRevisionDescription)
+    get_git_head_revision(REFSPEC COMMITHASH)
+endif()
+
+# no git or no tags, use ChangeLog
+if(NOT VERSION)
+    include(ChangeLogVersion)
+    changelog_version(VERSION REVISION VERSION_RELEASE)
+endif()
+
+# generate version.h
+include_directories(${CMAKE_BINARY_DIR})
+configure_file("${CMAKE_SOURCE_DIR}/src/version.h.in" "${CMAKE_BINARY_DIR}/version.h" @ONLY)
 
 IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
     ADD_DEFINITIONS(-DDEBUG)
@@ -207,21 +208,11 @@ ELSE( ENABLE_LIRC )
         SET( WITHLIRC 0 )
 ENDIF( ENABLE_LIRC )
 
-# Set the default install dir
-IF( NOT DATA_INSTALL_DIR )
-    SET( DATA_INSTALL_DIR "share/vbam" )
-ENDIF( NOT DATA_INSTALL_DIR )
-
-SET( PKGDATADIR ${CMAKE_INSTALL_PREFIX}/${DATA_INSTALL_DIR} )
-
-# Set the configuration file location
-IF( NOT SYSCONF_INSTALL_DIR )
-    SET( SYSCONF_INSTALL_DIR "/etc" )
-ENDIF( NOT SYSCONF_INSTALL_DIR )
+INCLUDE(GNUInstallDirs)
 
 # C defines
-ADD_DEFINITIONS (-DHAVE_NETINET_IN_H -DHAVE_ARPA_INET_H -DHAVE_ZLIB_H -DFINAL_VERSION -DSDL -DUSE_OPENGL -DSYSCONF_INSTALL_DIR=\\\""${SYSCONF_INSTALL_DIR}"\\\" -DWITH_LIRC=${WITHLIRC})
-ADD_DEFINITIONS (-DVERSION=\\\""${VERSION}"\\\" -DPKGDATADIR=\\\""${PKGDATADIR}"\\\" -DPACKAGE=)
+ADD_DEFINITIONS (-DHAVE_NETINET_IN_H -DHAVE_ARPA_INET_H -DHAVE_ZLIB_H -DFINAL_VERSION -DSDL -DUSE_OPENGL -DSYSCONF_INSTALL_DIR="${CMAKE_INSTALL_FULL_SYSCONFDIR}" -DWITH_LIRC=${WITHLIRC})
+ADD_DEFINITIONS (-DPKGDATADIR="${CMAKE_INSTALL_FULL_DATADIR}/vbam" -DPACKAGE=)
 
 if( ENABLE_LINK )
     # IPC linking code needs sem_timedwait which can be either in librt or pthreads
@@ -262,7 +253,7 @@ ENDIF( NOT ENABLE_ASM_CORE )
 if( ENABLE_NLS )
     SET( LOCALEDIR ${CMAKE_INSTALL_PREFIX}/share/locale )
     ADD_DEFINITIONS ( -DENABLE_NLS )
-    ADD_DEFINITIONS ( -DLOCALEDIR=\\\""${LOCALEDIR}"\\\" )
+    ADD_DEFINITIONS ( -DLOCALEDIR="${LOCALEDIR}" )
     # for now, only GBALink.cpp uses gettext() directly
     IF(APPLE)
         # use Homebrew gettext if available
@@ -295,36 +286,57 @@ endif( ENABLE_NLS )
 
 # Win32 deps submodule
 IF(WIN32)
-    IF(NOT EXISTS "${CMAKE_SOURCE_DIR}/dependencies/mingw-xaudio/include" AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
-        MESSAGE(FATAL_ERROR "Please pull in git submodules, e.g.\nrun: git submodule update --init --recursive")
+    IF(NOT EXISTS "${CMAKE_SOURCE_DIR}/dependencies/mingw-xaudio/include")
+        set(git_checkout FALSE)
+        find_package(Git)
+        if(GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+            set(git_checkout TRUE)
+            execute_process(COMMAND "${GIT_EXECUTABLE}" submodule update --remote --recursive RESULT_VARIABLE git_status WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        endif()
+
+        if(NOT (git_checkout AND git_status EQUAL 0))
+            message(FATAL_ERROR "Please pull in git submodules, e.g.\nrun: git submodule update --remote --recursive")
+        endif()
     ENDIF()
 
-    INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/dependencies/mingw-xaudio/include")
-
-    IF(MSVC)
+    IF(MINGW)
+        INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/dependencies/mingw-xaudio/include")
+    ELSEIF(MSVC)
         SET(DEPS_MSVC "${CMAKE_SOURCE_DIR}/dependencies/msvc")
         INCLUDE_DIRECTORIES("${DEPS_MSVC}") # for GL/glext.h and getopt.h
     ENDIF()
 ENDIF()
 
+include(ProcessorCount)
+ProcessorCount(num_cpus)
+
 # Compiler flags
 
 IF(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID STREQUAL Clang)
-    SET(LTO_FLAG "")
+    SET(LTO_FLAGS "")
     IF(ENABLE_LTO)
         IF(CMAKE_COMPILER_IS_GNUCXX)
-            SET(LTO_FLAG -flto=10)
+            if(num_cpus GREATER 1)
+                SET(LTO_FLAGS -flto=${num_cpus} -ffat-lto-objects)
+            else()
+                SET(LTO_FLAGS -flto -ffat-lto-objects)
+            endif()
         ELSE()
-            SET(LTO_FLAG -flto)
+            SET(LTO_FLAGS -flto)
         ENDIF()
     ENDIF(ENABLE_LTO)
 
     # common optimization flags
     IF(NOT (APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL Clang AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.3))
-        SET(MY_C_OPT_FLAGS -O2 -mtune=generic -fomit-frame-pointer ${LTO_FLAG})
+        SET(MY_C_OPT_FLAGS -O2 -fomit-frame-pointer ${LTO_FLAGS})
     ELSE()
         # LTO and -fomit-frame-pointer generate broken binaries on Lion with XCode 4.2 tools
-        SET(MY_C_OPT_FLAGS -O2 -mtune=generic)
+        SET(MY_C_OPT_FLAGS -O2)
+    ENDIF()
+
+    # only use -mtune=generic on PC architectures
+    IF(X86_32 OR AMD64)
+        SET(MY_C_OPT_FLAGS ${MY_C_OPT_FLAGS} -mtune=generic)
     ENDIF()
 
     # common debug flags
@@ -455,10 +467,8 @@ if(MSVC)
 endif(MSVC)
 
 SET(HDR_MAIN
-    src/AutoBuild.h
     src/System.h
     src/Util.h
-    src/version.h
     src/common/array.h
     src/common/ConfigManager.h
     src/common/dictionary.h
@@ -718,22 +728,22 @@ IF( ENABLE_SDL )
         ${WIN32_LIBRARIES}
         ${LIRC_CLIENT_LIBRARY}
     )
-    INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/vbam DESTINATION bin)
+    INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/vbam${CMAKE_EXECUTABLE_SUFFIX} DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 
     IF( WIN32 )
         INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sdl/vbam.cfg-example
-                DESTINATION ${CMAKE_INSTALL_PREFIX}/${SYSCONF_INSTALL_DIR}
+                DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}
                 RENAME vbam.cfg)
     ELSE( WIN32 )
         INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/sdl/vbam.cfg-example
-                DESTINATION ${SYSCONF_INSTALL_DIR}
+                DESTINATION ${CMAKE_INSTALL_FULL_SYSCONFDIR}
                 RENAME vbam.cfg)
     ENDIF( WIN32 )
 ENDIF( ENABLE_SDL )
 
 IF( ENABLE_WX )
     add_subdirectory(src/wx)
-    INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/visualboyadvance-m${CMAKE_EXECUTABLE_SUFFIX} DESTINATION bin)
+    INSTALL(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/visualboyadvance-m${CMAKE_EXECUTABLE_SUFFIX} DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 ENDIF( ENABLE_WX )
 
 if( ENABLE_WX )
@@ -742,15 +752,15 @@ if( ENABLE_WX )
         add_subdirectory(po)
     endif( ENABLE_NLS )
 endif( ENABLE_WX )
-INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/vba-over.ini DESTINATION ${DATA_INSTALL_DIR})
+INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/vba-over.ini DESTINATION ${CMAKE_INSTALL_FULL_DATADIR}/vbam)
 
 # manual pages
 IF( UNIX )
     IF( ENABLE_SDL )
-        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/vbam.6 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man6)
+        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/vbam.6 DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man6)
     ENDIF( ENABLE_SDL )
     IF( ENABLE_WX )
-        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/visualboyadvance-m.6 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man6)
+        INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/debian/visualboyadvance-m.6 DESTINATION ${CMAKE_INSTALL_FULL_MANDIR}/man6)
     ENDIF( ENABLE_WX )
 ENDIF( UNIX )
 
@@ -759,7 +769,7 @@ IF( NOT WIN32 AND NOT APPLE )
     IF( ENABLE_WX )
         INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/wx/wxvbam.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
         INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/wx/wxvbam.appdata.xml DESTINATION ${CMAKE_INSTALL_PREFIX}/share/appdata)
-        INSTALL(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/wx/icons/sizes/ DESTINATION share/icons/hicolor)
+        INSTALL(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/wx/icons/sizes/ DESTINATION ${CMAKE_INSTALL_PREFIX}/share/icons/hicolor)
     ENDIF( ENABLE_WX )
 ENDIF( NOT WIN32 AND NOT APPLE )
 

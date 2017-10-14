@@ -110,10 +110,10 @@ public:
             char host[length];
             GetLinkServerHost(host, length);
             title.Printf(_("Waiting for clients..."));
-            connmsg.Printf(_("Server IP address is: %s\n"), wxString(host, wxConvLibc).c_str());
+            connmsg.Printf(_("Server IP address is: %s\n"), wxString(host, wxConvLibc).mb_str());
         } else {
             title.Printf(_("Waiting for connection..."));
-            connmsg.Printf(_("Connecting to %s\n"), gopts.link_host.c_str());
+            connmsg.Printf(_("Connecting to %s\n"), gopts.link_host.mb_str());
         }
 
         // Init link
@@ -1802,7 +1802,7 @@ public:
             // to put the plugins...  it depends on where program was
             // installed, and of course OS
             wxString msg;
-            msg.Printf(_("No usable rpi plugins found in %s"), plpath.c_str());
+            msg.Printf(_("No usable rpi plugins found in %s"), plpath.mb_str());
             systemScreenMessage(msg);
             ch->Hide();
             txt->Hide();
@@ -2292,7 +2292,19 @@ public:
 /////////////////////////////
 //Check if a pointer from the XRC file is valid. If it's not, throw an error telling the user.
 template <typename T>
-void CheckThrowXRCError(T pointer, std::string name)
+void CheckThrowXRCError(T pointer, const wxString& name)
+{
+    if (pointer == NULL) {
+        std::string errormessage = "Unable to load a \"";
+        errormessage += typeid(pointer).name();
+        errormessage += "\" from the builtin xrc file: ";
+        errormessage += name.mb_str();
+        throw std::runtime_error(errormessage);
+    }
+}
+
+template <typename T>
+void CheckThrowXRCError(T pointer, const char* name)
 {
     if (pointer == NULL) {
         std::string errormessage = "Unable to load a \"";
@@ -2302,6 +2314,7 @@ void CheckThrowXRCError(T pointer, std::string name)
         throw std::runtime_error(errormessage);
     }
 }
+
 wxDialog* MainFrame::LoadXRCDialog(const char* name)
 {
     wxString dname = wxString::FromUTF8(name);
@@ -2347,7 +2360,15 @@ T* SafeXRCCTRL(wxWindow* parent, const char* name)
     wxString dname = wxString::FromUTF8(name);
     //This is needed to work around a bug in XRCCTRL
     wxString Ldname = dname;
-    T* output = XRCCTRL(*parent, dname, T);
+    T* output = XRCCTRL_D(*parent, dname, T);
+    CheckThrowXRCError(output, name);
+    return output;
+}
+
+template <typename T>
+T* SafeXRCCTRL(wxWindow* parent, const wxString& name)
+{
+    T* output = XRCCTRL_D(*parent, name, T);
     CheckThrowXRCError(output, name);
     return output;
 }
@@ -2507,6 +2528,50 @@ void MainFrame::MenuOptionIntRadioValue(const char* menuName, int& field, int va
     }
 }
 
+// The Windows icon loading code is from:
+//
+// https://stackoverflow.com/questions/17949693/windows-volume-mixer-icon-size-is-too-large/46310786#46310786
+//
+// This works around a Windows bug where the icon is too large in the
+// app-specific volume controls.
+
+#ifdef __WXMSW__
+    #include <Windows.h>
+    #include <CommCtrl.h>
+    #include <wx/msw/private.h>
+    typedef int (WINAPI *func_LoadIconWithScaleDown)(HINSTANCE, LPCWSTR, int, int, HICON*);
+#endif
+
+void MainFrame::BindAppIcon() {
+#ifdef __WXMSW__
+    wxDynamicLibrary comctl32("comctl32", wxDL_DEFAULT | wxDL_QUIET);
+    func_LoadIconWithScaleDown load_icon_scaled = reinterpret_cast<func_LoadIconWithScaleDown>(comctl32.GetSymbol("LoadIconWithScaleDown"));
+    int icon_set_count = 0;
+
+    HICON hIconLg;
+    if (load_icon_scaled && SUCCEEDED(load_icon_scaled(wxGetInstance(), _T("AAAAA_MAINICON"), ::GetSystemMetrics(SM_CXICON), ::GetSystemMetrics(SM_CYICON), &hIconLg))) {
+        ::SendMessage(GetHandle(), WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(hIconLg));
+        ++icon_set_count;
+    }
+    HICON hIconSm;
+    if (load_icon_scaled && SUCCEEDED(load_icon_scaled(wxGetInstance(), _T("AAAAA_MAINICON"), ::GetSystemMetrics(SM_CXSMICON), ::GetSystemMetrics(SM_CYSMICON), &hIconSm))) {
+        ::SendMessage(GetHandle(), WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(hIconSm));
+        ++icon_set_count;
+    }
+
+    if (icon_set_count == 2) return;
+    // otherwise fall back to Wx method of setting icon
+#endif
+    wxIcon icon = wxXmlResource::Get()->LoadIcon(wxT("MainIcon"));
+
+    if (!icon.IsOk()) {
+        wxLogInfo(_("Main icon not found"));
+        icon = wxICON(wxvbam);
+    }
+
+    SetIcon(icon);
+}
+
 // If there is a menubar, store all special menuitems
 #define XRCITEM_I(id) menubar->FindItem(id, NULL)
 #define XRCITEM_D(s) XRCITEM_I(XRCID_D(s))
@@ -2529,16 +2594,9 @@ bool MainFrame::BindControls()
     // however, do not enable until end of init, since errors will start
     // the idle loop on wxGTK
     wxIdleEvent::SetMode(wxIDLE_PROCESS_SPECIFIED);
-    // could/should probably take this from xrc as well
-    // but I don't think xrc supports icon from Windows resource
-    wxIcon icon = wxXmlResource::Get()->LoadIcon(wxT("MainIcon"));
 
-    if (!icon.IsOk()) {
-        wxLogInfo(_("Main icon not found"));
-        icon = wxICON(wxvbam);
-    }
+    BindAppIcon();
 
-    SetIcon(icon);
     // NOOP if no status area
     SetStatusText(wxT(""));
 
@@ -2640,9 +2698,9 @@ bool MainFrame::BindControls()
                         if (a->GetFlags() == e->GetFlags() && a->GetKeyCode() == e->GetKeyCode()) {
                             if (e->GetMenuItem()) {
                                 wxLogInfo(_("Duplicate menu accelerator: %s for %s and %s; keeping first"),
-                                    wxKeyTextCtrl::ToString(a->GetFlags(), a->GetKeyCode()).c_str(),
-                                    e->GetMenuItem()->GetItemLabelText().c_str(),
-                                    mi->GetItemLabelText().c_str());
+                                    wxKeyTextCtrl::ToString(a->GetFlags(), a->GetKeyCode()).mb_str(),
+                                    e->GetMenuItem()->GetItemLabelText().mb_str(),
+                                    mi->GetItemLabelText().mb_str());
                                 delete a;
                                 a = 0;
                             } else {
@@ -2654,8 +2712,8 @@ bool MainFrame::BindControls()
                                             break;
 
                                     wxLogInfo(_("Menu accelerator %s for %s overrides default for %s ; keeping menu"),
-                                        wxKeyTextCtrl::ToString(a->GetFlags(), a->GetKeyCode()).c_str(),
-                                        mi->GetItemLabelText().c_str(),
+                                        wxKeyTextCtrl::ToString(a->GetFlags(), a->GetKeyCode()).mb_str(),
+                                        mi->GetItemLabelText().mb_str(),
                                         cmdtab[cmd].cmd);
                                 }
 
@@ -2760,7 +2818,7 @@ bool MainFrame::BindControls()
     for (int i = 0; i < checkable_mi.size(); i++)
         if (!checkable_mi[i].boolopt && !checkable_mi[i].intopt) {
             wxLogError(_("Invalid menu item %s; removing"),
-                checkable_mi[i].mi->GetItemLabelText().c_str());
+                checkable_mi[i].mi->GetItemLabelText().mb_str());
             checkable_mi[i].mi->GetMenu()->Remove(checkable_mi[i].mi);
             checkable_mi[i].mi = NULL;
         }
@@ -3214,7 +3272,7 @@ bool MainFrame::BindControls()
                 // "Unable to load dialog GameBoyConfig from resources", this is
                 // probably the reason.
                 pn.Printf(wxT("cp%d"), i + 1);
-                wxWindow* w = SafeXRCCTRL<wxWindow>(d, ToString(pn).c_str());
+                wxWindow* w = SafeXRCCTRL<wxWindow>(d, pn);
                 GBColorConfigHandler[i].p = w;
                 GBColorConfigHandler[i].pno = i;
                 wxFarRadio* cb = SafeXRCCTRL<wxFarRadio>(w, "UsePalette");
@@ -3231,7 +3289,7 @@ bool MainFrame::BindControls()
                 for (int j = 0; j < 8; j++) {
                     wxString s;
                     s.Printf(wxT("Color%d"), j);
-                    wxColourPickerCtrl* cp = SafeXRCCTRL<wxColourPickerCtrl>(w, ToString(s).c_str());
+                    wxColourPickerCtrl* cp = SafeXRCCTRL<wxColourPickerCtrl>(w, s);
                     GBColorConfigHandler[i].cp[j] = cp;
                     cp->SetValidator(wxColorValidator(&systemGbPalette[i * 8 + j]));
                 }
@@ -3317,10 +3375,6 @@ bool MainFrame::BindControls()
                 rb->Hide();
             }
 #endif
-            getrbi("OutputCairo", gopts.render_method, RND_CAIRO);
-#ifdef NO_CAIRO
-            rb->Hide();
-#endif
             getrbi("OutputDirect3D", gopts.render_method, RND_DIRECT3D);
 #if !defined(__WXMSW__) || defined(NO_D3D) || 1 // not implemented
             rb->Hide();
@@ -3401,8 +3455,7 @@ bool MainFrame::BindControls()
                 NULL, &sound_config_handler);
             sound_config_handler.AdjustFrames(10);
             /// Game Boy
-            wxPanel* p;
-            p = SafeXRCCTRL<wxPanel>(d, "GBEnhanceSoundDep");
+            SafeXRCCTRL<wxPanel>(d, "GBEnhanceSoundDep");
             getsl("GBEcho", gopts.gb_echo);
             getsl("GBStereo", gopts.gb_stereo);
             /// Game Boy Advance
@@ -3438,7 +3491,7 @@ bool MainFrame::BindControls()
             // "Unable to load dialog JoypadConfig from resources", this is
             // probably the reason.
             pn.Printf(wxT("joy%d"), i + 1);
-            wxWindow* w = SafeXRCCTRL<wxWindow>(joyDialog, ToString(pn).c_str());
+            wxWindow* w = SafeXRCCTRL<wxWindow>(joyDialog, pn);
             wxFarRadio* cb;
             cb = SafeXRCCTRL<wxFarRadio>(w, "DefaultConfig");
 
@@ -3452,7 +3505,7 @@ bool MainFrame::BindControls()
 
             for (int j = 0; j < NUM_KEYS; j++) {
                 wxJoyKeyTextCtrl* tc = XRCCTRL_D(*w, joynames[j], wxJoyKeyTextCtrl);
-                CheckThrowXRCError(tc, ToString(joynames[j]));
+                CheckThrowXRCError(tc, joynames[j]);
                 wxWindow* p = tc->GetParent();
 
                 if (p == prevp)

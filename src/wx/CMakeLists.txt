@@ -5,11 +5,6 @@ IF(NOT CMAKE_VERSION VERSION_LESS 3.0)
     cmake_policy(SET CMP0043 NEW) # for wxWidgets
 ENDIF()
 
-# not yet implemented
-SET(CAIRO_DEFAULT OFF)
-
-option(ENABLE_CAIRO "Enable Cairo rendering for the wxWidgets port" ${CAIRO_DEFAULT})
-
 if( WIN32 )
   # not yet implemented
   option( ENABLE_DIRECT3D "Enable Direct3D rendering for the wxWidgets port" ON )
@@ -18,21 +13,9 @@ endif( WIN32 )
 
 option( ENABLE_OPENAL "Enable OpenAL for the wxWidgets port" ON )
 
-IF(WIN32 AND MINGW)
-    IF(NOT EXISTS "${CMAKE_SOURCE_DIR}/dependencies")
-        MESSAGE(FATAL_ERROR "Please run: git submodule update --init --recursive")
-    ENDIF()
-
-    INCLUDE_DIRECTORIES("${CMAKE_SOURCE_DIR}/dependencies/mingw-xaudio/include")
-ENDIF()
-
 IF(APPLE)
     ADD_DEFINITIONS(-DwxMAC_USE_CORE_GRAPHICS)
 ENDIF(APPLE)
-
-if( NOT ENABLE_CAIRO )
-    ADD_DEFINITIONS (-DNO_CAIRO)
-endif( NOT ENABLE_CAIRO )
 
 if( NOT ENABLE_XAUDIO2 )
     ADD_DEFINITIONS (-DNO_XAUDIO2)
@@ -57,16 +40,25 @@ IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
     SET(wxWidgets_USE_DEBUG ON) # noop if wx is compiled with --disable-debug, like in Mac Homebrew atm
 ENDIF()
 
-IF(APPLE OR (WINDOWS AND FEDORA_HOST))
-    SET(wxWidgets_USE_STATIC ON)
-ENDIF()
-
 SET(wxWidgets_USE_UNICODE ON)
 # adv is for wxAboutBox
 # xml, html is for xrc
 SET(wxWidgets_USE_LIBS xrc xml html adv gl net core base gl)
 #list(APPEND wxWidgets_CONFIG_OPTIONS --version=2.8)
-FIND_PACKAGE(wxWidgets REQUIRED)
+
+# the gl lib may not be available, and if it looks like it is we still have to
+# do a compile test later
+FIND_PACKAGE(wxWidgets QUIET)
+
+SET(CHECK_WX_OPENGL FALSE)
+
+IF(wxWidgets_FOUND)
+    SET(CHECK_WX_OPENGL TRUE)
+ELSE()
+    SET(WX_HAS_OPENGL   FALSE)
+    # the requirement check is later after the opengl compile test
+ENDIF()
+
 INCLUDE_DIRECTORIES(${wxWidgets_INCLUDE_DIRS})
 
 IF(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -90,6 +82,11 @@ ENDFOREACH()
 SET(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} ${MY_CXX_FLAGS} ${MY_C_FLAGS} ${MY_CXX_LINKER_FLAGS} ${MY_C_LINKER_FLAGS} ${wxWidgets_LIBRARIES})
 SET(CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS} ${wxWidgets_CXX_FLAGS} ${MY_CXX_FLAGS} ${MY_C_FLAGS})
 
+IF(WIN32)
+    SET(CMAKE_REQUIRED_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS} "-Wl,--subsystem,console")
+    SET(CMAKE_REQUIRED_LIBRARIES   ${CMAKE_REQUIRED_LIBRARIES}   "-Wl,--subsystem,console")
+ENDIF()
+
 SET(CMAKE_REQUIRED_INCLUDES ${CMAKE_REQUIRED_INCLUDES} ${wxWidgets_INCLUDE_DIRS})
 
 FOREACH(DEF ${wxWidgets_DEFINITIONS})
@@ -101,7 +98,9 @@ SET(CMAKE_REQUIRED_DEFINITIONS ${CMAKE_REQUIRED_FLAGS} ${CMAKE_REQUIRED_DEFINITI
 
 INCLUDE(CheckCXXSourceCompiles)
 
-CHECK_CXX_SOURCE_COMPILES("
+IF(CHECK_WX_OPENGL)
+    CHECK_CXX_SOURCE_COMPILES("
+#include <wx/wxprec.h>
 #include <wx/config.h>
 #include <wx/glcanvas.h>
 
@@ -109,6 +108,7 @@ int main(int argc, char** argv) {
     wxGLCanvas canvas(NULL, wxID_ANY, NULL, wxPoint(0, 0), wxSize(300, 300), 0);
     return 0;
 }" WX_HAS_OPENGL)
+ENDIF()
 
 IF(NOT WX_HAS_OPENGL)
     ADD_DEFINITIONS(-DNO_OGL)
@@ -116,7 +116,129 @@ IF(NOT WX_HAS_OPENGL)
     FIND_PACKAGE(wxWidgets REQUIRED)
 ENDIF()
 
-# end of wx OpenGL check
+IF(CMAKE_COMPILER_IS_GNUCXX AND NOT CMAKE_CROSSCOMPILING)
+    SET(WX_ABI_FOUND_MATCH FALSE)
+
+    INCLUDE(CheckCXXSourceRuns)
+
+    SET(WX_TEST_CONSOLE_APP "
+#include <cstdlib>
+#include <iostream>
+#include <wx/wxprec.h>
+#include <wx/wx.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include \"MinHook.h\"
+
+typedef int (WINAPI *MESSAGEBOXW)(HWND, LPCWSTR, LPCWSTR, UINT);
+typedef int (WINAPI *MESSAGEBOXA)(HWND, LPCSTR,  LPCSTR,  UINT);
+
+// Pointers for calling original MessageBoxW/A.
+MESSAGEBOXW fpMessageBoxW = NULL;
+MESSAGEBOXA fpMessageBoxA = NULL;
+
+// Detour function which overrides MessageBoxW.
+int WINAPI DetourMessageBoxW(HWND hWnd, LPCWSTR lpText, LPCWSTR lpCaption, UINT uType)
+{
+    std::wcerr << lpCaption << \": \" << lpText << std::endl;
+}
+
+// Detour function which overrides MessageBoxA.
+int WINAPI DetourMessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType)
+{
+    std::cerr << lpCaption << \": \" << lpText << std::endl;
+}
+#endif
+
+class MyApp : public wxAppConsole {
+public:
+    virtual bool OnInit();
+};
+
+bool MyApp::OnInit() {
+    exit(0);
+}
+
+wxIMPLEMENT_APP_NO_MAIN(MyApp);
+
+int main(int argc, char** argv)
+{
+#ifdef _WIN32
+    // just in case (this does nothing though)
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+
+    // we need to install a trampoline for messageboxes, because Wx is
+    // hard-coded to show a messagebox on wxLogFatalError()
+
+    // Initialize MinHook (for trampoline).
+    if (MH_Initialize() != MH_OK) return 1;
+
+    // Create a hook for MessageBoxW and MessageBoxA
+    if (MH_CreateHook(&MessageBoxW, &DetourMessageBoxW, reinterpret_cast<LPVOID*>(&fpMessageBoxW)) != MH_OK)
+        return 1;
+    if (MH_CreateHook(&MessageBoxA, &DetourMessageBoxA, reinterpret_cast<LPVOID*>(&fpMessageBoxA)) != MH_OK)
+        return 1;
+
+    if (MH_EnableHook(&MessageBoxW) != MH_OK) return 1;
+    if (MH_EnableHook(&MessageBoxA) != MH_OK) return 1;
+#endif
+
+    wxEntry(argc, argv);
+    wxEntryCleanup();
+    return 0;
+}
+")
+
+    # on windows we need the trampoline library from dependencies
+    IF(WIN32)
+        SET(CMAKE_REQUIRED_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS} -w -fpermissive "-I${CMAKE_SOURCE_DIR}/dependencies/minhook/include")
+        SET(CMAKE_REQUIRED_LIBRARIES   ${CMAKE_REQUIRED_LIBRARIES}   -Wl,--subsystem,console)
+
+        IF(AMD64)
+            SET(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} "${CMAKE_SOURCE_DIR}/dependencies/minhook/libMinHook_64.a")
+        ELSE() # assume 32 bit windows
+            SET(CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES} "${CMAKE_SOURCE_DIR}/dependencies/minhook/libMinHook.a")
+        ENDIF()
+    ENDIF()
+
+    CHECK_CXX_SOURCE_RUNS("${WX_TEST_CONSOLE_APP}" WX_DEFAULT_ABI_VERSION_COMPATIBLE)
+
+    IF(NOT WX_DEFAULT_ABI_VERSION_COMPATIBLE)
+        # currently goes up to 11 with gcc7, but we give it some room
+        SET(WX_ABI_VERSION 15)
+
+        SET(CURRENT_DEFS ${CMAKE_REQUIRED_DEFINITIONS})
+        SET(CURRENT_LIBS ${CMAKE_REQUIRED_LIBRARIES})
+
+        WHILE(NOT WX_ABI_VERSION EQUAL -1)
+            SET(CMAKE_REQUIRED_DEFINITIONS ${CURRENT_DEFS} "-fabi-version=${WX_ABI_VERSION}")
+            SET(CMAKE_REQUIRED_LIBRARIES   ${CURRENT_LIBS} "-fabi-version=${WX_ABI_VERSION}")
+
+            SET(WX_ABI_VAR "WX_ABI_VERSION_${WX_ABI_VERSION}")
+
+            CHECK_CXX_SOURCE_RUNS("${WX_TEST_CONSOLE_APP}" ${WX_ABI_VAR})
+
+            IF(${${WX_ABI_VAR}})
+                SET(WX_ABI_FOUND_MATCH TRUE)
+                BREAK()
+            ENDIF()
+
+            MATH(EXPR WX_ABI_VERSION "${WX_ABI_VERSION} - 1")
+        ENDWHILE()
+
+        SET(CMAKE_REQUIRED_DEFINITIONS ${CURRENT_DEFS})
+        SET(CMAKE_REQUIRED_LIBRARIES   ${CURRENT_LIBS})
+    ENDIF()
+
+    IF(WX_ABI_FOUND_MATCH)
+        # add C++ flags
+        STRING(REGEX REPLACE "<FLAGS>" "<FLAGS> -fabi-version=${WX_ABI_VERSION} " CMAKE_CXX_COMPILE_OBJECT ${CMAKE_CXX_COMPILE_OBJECT})
+        SET(CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE} -fabi-version=${WX_ABI_VERSION}")
+    ENDIF()
+ENDIF()
+
+# end of wx compile checks
 
 FOREACH(CXX_COMPILE_FLAG ${wxWidgets_CXX_FLAGS})
     ADD_COMPILE_OPTIONS(${CXX_COMPILE_FLAG})
@@ -130,19 +252,6 @@ FIND_PROGRAM(MSGINIT msginit)
 if(ENABLE_NLS AND (NOT XGETTEXT OR NOT MSGINIT))
    message(SEND_ERROR "Cannot find gettext ${XGETTEXT} ${MSGINIT}")
 endif(ENABLE_NLS AND (NOT XGETTEXT OR NOT MSGINIT))
-IF(ENABLE_CAIRO)
-    FIND_PACKAGE ( PkgConfig REQUIRED )
-    PKG_CHECK_MODULES(CAIRO REQUIRED cairo)
-    include_directories(${CAIRO_INCLUDE_DIRS})
-    IF(WIN32)
-       # need gdiplus to extract hdc for cairo context
-       SET(CAIRO_LIBRARIES ${CAIRO_LIBRARIES} -lgdiplus)
-    ENDIF(WIN32)
-    # SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${CAIRO_CFLAGS})
-ELSE(ENABLE_CAIRO)
-    ADD_DEFINITIONS (-DNO_CAIRO)
-    SET(CAIRO_LIBRARIES )
-ENDIF(ENABLE_CAIRO)
 IF(WIN32 AND ENABLE_DIRECTX)
     FIND_PACKGE ( DirectX REQUIRED )
 ENDIF(WIN32 AND ENABLE_DIRECTX)
@@ -252,19 +361,9 @@ SET(XRC_SOURCES
 
 SET(BIN2C ${CMAKE_BINARY_DIR}/bin2c)
 
-IF(CMAKE_HOST_WIN32)
-    SET(BIN2C ${BIN2C}.exe)
-ENDIF()
+INCLUDE(HostCompile)
 
-IF(MSVC)
-    ADD_CUSTOM_COMMAND(OUTPUT ${BIN2C}
-                       COMMAND cl ${CMAKE_CURRENT_SOURCE_DIR}/bin2c.c /link "/out:${BIN2C}"
-                       DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/bin2c.c)
-ELSE(MSVC)
-    ADD_CUSTOM_COMMAND(OUTPUT ${BIN2C}
-                       COMMAND cc ${CMAKE_CURRENT_SOURCE_DIR}/bin2c.c -o ${BIN2C}
-                       DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/bin2c.c)
-ENDIF(MSVC)
+HOST_COMPILE(${CMAKE_CURRENT_SOURCE_DIR}/bin2c.c ${BIN2C})
 
 ADD_CUSTOM_COMMAND(OUTPUT wxvbam.xrs
                    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -272,12 +371,12 @@ ADD_CUSTOM_COMMAND(OUTPUT wxvbam.xrs
                    DEPENDS ${XRC_SOURCES})
 ADD_CUSTOM_COMMAND(OUTPUT builtin-xrc.h
                    COMMAND ${BIN2C} wxvbam.xrs builtin-xrc.h builtin_xrs
-                   DEPENDS ${BIN2C} wxvbam.xrs)
+                   DEPENDS wxvbam.xrs)
 
 # use a built-in vba-over.ini if no config file present
 ADD_CUSTOM_COMMAND(OUTPUT builtin-over.h
                    COMMAND ${BIN2C} ${CMAKE_CURRENT_SOURCE_DIR}/../vba-over.ini builtin-over.h builtin_over
-                   DEPENDS ${BIN2C} ../vba-over.ini)
+                   DEPENDS ../vba-over.ini)
 
 # I don't like duplicating/triplicating code, so I only declare
 # event handlers once, and copy them in other places they are needed
@@ -305,6 +404,7 @@ SET( SRC_WX
    panel.cpp
    viewsupt.cpp
    wayland.cpp
+   strutils.cpp
    widgets/keyedit.cpp
    widgets/joyedit.cpp
    widgets/sdljoy.cpp
@@ -407,7 +507,6 @@ TARGET_LINK_LIBRARIES (
     ${wxWidgets_LIBRARIES}
     ${FFMPEG_LIBRARIES}
     ${DIRECTX_LIBRARIES}
-    ${CAIRO_LIBRARIES}
     ${GTK_LIBRARIES}
     ${OPENAL_LIBRARY}
 )
@@ -421,7 +520,7 @@ IF(WIN32)
     INSTALL(PROGRAMS ${PROJECT_BINARY_DIR}/visualboyadvance-m${CMAKE_EXECUTABLE_SUFFIX} DESTINATION ${CMAKE_BINARY_DIR})
 ENDIF(WIN32)
 IF(NOT WIN32 AND NOT APPLE)
-    INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/wxvbam.desktop DESTINATION share/applications)
+    INSTALL(FILES ${CMAKE_CURRENT_SOURCE_DIR}/wxvbam.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/applications)
 ENDIF(NOT WIN32 AND NOT APPLE)
 
 if(APPLE)
@@ -434,7 +533,16 @@ if(APPLE)
     # but only in Release mode
     IF(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         ADD_CUSTOM_COMMAND(TARGET visualboyadvance-m POST_BUILD
-            COMMAND ${CMAKE_SOURCE_DIR}/tools/osx/third_party_libs_tool "$<TARGET_FILE_DIR:visualboyadvance-m>/../..")
+            COMMAND ${CMAKE_SOURCE_DIR}/tools/osx/third_party_libs_tool ./visualboyadvance-m.app
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+        ADD_CUSTOM_COMMAND(TARGET visualboyadvance-m POST_BUILD
+            COMMAND codesign -s "Developer ID Application" --deep ./visualboyadvance-m.app
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+        ADD_CUSTOM_COMMAND(TARGET visualboyadvance-m POST_BUILD
+            COMMAND zip -9r ./visualboyadvance-m-Mac.zip ./visualboyadvance-m.app
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
     ENDIF()
 endif(APPLE)
 

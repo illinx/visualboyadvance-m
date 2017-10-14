@@ -1,10 +1,24 @@
 #!/bin/sh
 
-cmake=cmake
+CMAKE=cmake
 
 main() {
     cd "$(dirname $0)"
 
+    check_command_line_args "$@"
+
+    target=$1
+
+    mktmp
+
+    check_os
+
+    ${os}_installdeps
+
+    quit 0
+}
+
+check_command_line_args() {
     while [ $# -gt 0 ]; do
         case "$1" in
             -h|--help|--usage)
@@ -21,27 +35,23 @@ main() {
         usage
         quit 1
     fi
+}
 
-    target=$1
-
-    mktmp
-
+check_os() {
     case "$(uname -s)" in
         Linux)
-            linux_installdeps
+            os=linux
             ;;
         Darwin)
-            osx_installdeps
+            os=mac
             ;;
         MINGW*|MSYS*)
-            msys2_installdeps
+            os=windows
             ;;
         *)
             error "Don't know how to install deps on your OS"
             ;;
     esac
-
-    quit 0
 }
 
 mktmp() {
@@ -154,6 +164,38 @@ linux_installdeps() {
     fi
 }
 
+# the -j flag for make parameter, empty if 1
+jobs_flag() {
+    if [ $(num_cpus) -gt 1 ]; then
+        echo "-j$(num_cpus)"
+    fi
+}
+
+# number of CPUs to use for jobs, 1 less than total to not overload resources
+num_cpus() {
+    if [ -n "$_num_cpus" ]; then
+        if [ $((_num_cpus - 1)) -lt 1 ]; then
+            echo 1
+        else
+            echo $((_num_cpus - 1))
+        fi
+        return 0
+    fi
+
+    # determine number of CPUs and cache it
+    if command -v nproc >/dev/null; then
+        _num_cpus=$(nproc)
+    elif [ $os = linux -o $os = windows ]; then
+        _num_cpus=$(grep '^processor		*:' /proc/cpuinfo | wc -l)
+    elif [ $os = mac ]; then
+        _num_cpus=$(sysctl -n hw.ncpu)
+    fi
+
+    [ -z "$_num_cpus" ] && _num_cpus=1
+
+    num_cpus
+}
+
 check_cross() {
     target=$(echo "$target" | tr 'A-Z' 'a-z')
 
@@ -198,7 +240,7 @@ check_cross() {
             esac
 
             # get the necessary win32 headers
-            check git submodule update --init --recursive
+            check git submodule update --remote --recursive
             ;;
         m32)
             if [ -z "$msys2" -a -z "$fedora" -a -z "$arch_linux" -a -z "$solus" ]; then
@@ -229,8 +271,8 @@ debian_installdeps() {
     installing
 
     if [ -z "$target" ]; then
-        check sudo apt-get -qq update
-        check sudo apt-get -qy install build-essential g++ nasm cmake gettext zlib1g-dev libgl1-mesa-dev libavcodec-dev libavformat-dev libswscale-dev libavutil-dev libgettextpo-dev libpng-dev libsdl2-dev libsfml-dev libopenal-dev libwxgtk3.0-dev libgtk2.0-dev libgtk-3-dev libcairo2-dev
+        sudo apt-get -qq update
+        check sudo apt-get -qy install build-essential g++ nasm cmake gettext zlib1g-dev libgl1-mesa-dev libavcodec-dev libavformat-dev libswscale-dev libavutil-dev libgettextpo-dev libpng-dev libsdl2-dev libsfml-dev libopenal-dev libwxgtk3.0-dev libgtk2.0-dev libgtk-3-dev
     else
         case "$target" in
             mingw-w64-i686)
@@ -244,11 +286,11 @@ debian_installdeps() {
                 ;;
         esac
 
-        cmake="/usr/lib/mxe/usr/bin/${target}-cmake"
+        CMAKE="/usr/lib/mxe/usr/bin/${target}-cmake"
 
         mxe_apt_sources='/etc/apt/sources.list.d/mxeapt.list'
 
-        check sudo apt-get -qq update
+        sudo apt-get -qq update
         if [ -z "$(apt-cache search '^mxe-source$')" ]; then
             if [ ! -f "$mxe_apt_sources" ]; then
                 echo "deb http://pkg.mxe.cc/repos/apt/debian wheezy main" | sudo -- sh -c "cat > $mxe_apt_sources"
@@ -259,7 +301,7 @@ debian_installdeps() {
         fi
 
         set --
-        for dep in gcc zlib ffmpeg gettext sdl2 sfml openal wxwidgets cairo; do
+        for dep in gcc zlib ffmpeg gettext sdl2 sfml openal wxwidgets; do
             set -- "$@" "mxe-${target}-$dep"
         done
         check sudo apt-get -qy install build-essential cmake "$@"
@@ -270,6 +312,10 @@ debian_installdeps() {
 
 fedora_installdeps() {
     fedora=1
+    ffmpeg=ffmpeg-devel
+    no_ffmpeg=
+    rpms_installed=
+
     check_cross
     installing
 
@@ -295,7 +341,7 @@ fedora_installdeps() {
             break
         fi
         # check if already installed
-        if rpm -q rpmfusion-free-release-${fedora_release} && rpm -q rpmfusion-nonfree-release-${fedora_release}; then
+        if rpm -q rpmfusion-free-release-${fedora_release} >/dev/null 2>&1 && rpm -q rpmfusion-nonfree-release-${fedora_release} >/dev/null 2>&1; then
             info_msg 'rpmfusion already installed, good'
             break
         fi
@@ -334,10 +380,10 @@ fedora_installdeps() {
             # this is sometimes necessary for rawhide
             set -- --exclude='glibc32*'
         fi
-        for pkg in zlib-devel mesa-libGL-devel ffmpeg-devel gettext-devel libpng-devel SDL2-devel SFML-devel openal-soft-devel wxGTK3-devel cairo-devel gtk2-devel gtk3-devel; do
+        for pkg in zlib-devel mesa-libGL-devel ffmpeg-devel gettext-devel libpng-devel SDL2-devel SFML-devel openal-soft-devel wxGTK3-devel gtk2-devel gtk3-devel; do
             case $pkg in
                 *ffmpeg*)
-                    [ -n $no_ffmpeg ] && continue
+                    [ -n "$no_ffmpeg" ] && continue
                     ;;
             esac
 
@@ -353,7 +399,7 @@ fedora_installdeps() {
         done
 
         # fedora has a bug where all necessary -devel packages are not pulled in for 32 bit direct -devel deps
-        # this hacks adds them to the list
+        # this hack adds them to the list
         if [ -n "$amd64" -a "$target" = m32 ]; then
             info_msg 'Calculating dependencies, this will take a while..'
             curdeps=
@@ -362,7 +408,46 @@ fedora_installdeps() {
                 curdeps=$newdeps
                 set -- $(echo "$@" $(sudo dnf -y --nogpgcheck repoquery --deplist "$@" 2>/dev/null | sed -n 's/\.x86_64$/.i686/; s/^ *provider: *\([^ ]*-devel-.*\)$/\1/p' | sort -u) | sed 's/  */\n/g' | sort -u)
                 newdeps=$@
+                printf '%s' .
             done
+
+            echo
+            info_msg 'Done'
+
+            ## install the RPMs with rpm --force get around file conflicts
+
+            host_rpms=$(echo "$@" | sed 's/\.i686//g')
+
+            # first update the host arch versions to reduce chances of conflicts
+            check sudo dnf -y --nogpgcheck --allowerasing --best install $host_rpms
+
+            oldcwd=$PWD
+            mkdir "$tmp/rpms"
+            cd "$tmp/rpms"
+
+            check sudo dnf -y --nogpgcheck --allowerasing --best download "$@"
+
+            # first try installing with dnf to pull in deps
+            check sudo dnf -y --nogpgcheck --allowerasing --best --skip-broken install *.rpm
+
+            # follow up with rpm --force to ignore conflicts
+            check sudo rpm -Uvh --force *.rpm
+
+            rm -f *.rpm
+
+            # reinstall the host rpms to make sure any overwritten files are the host version
+            check sudo dnf -y --nogpgcheck --allowerasing --best download $host_rpms
+
+            check sudo dnf -y --nogpgcheck --allowerasing --best --skip-broken install *.rpm
+
+            check sudo rpm -Uvh --force *.rpm
+
+            cd "$oldcwd"
+            rm -rf "$tmp/rpms"
+
+            ffmpeg=ffmpeg-devel.i686
+
+            rpms_installed=1
         fi
     else # mingw build
         set -- "$@" pkgconfig
@@ -380,7 +465,7 @@ fedora_installdeps() {
                 ;;
         esac
         # install static deps
-        for pkg in zlib gettext libpng SDL2 wxWidgets cairo; do
+        for pkg in zlib gettext libpng SDL2 wxWidgets; do
             set -- "$@" "${target}-${pkg}-static"
         done
         # install deps that are not available as static
@@ -391,12 +476,9 @@ fedora_installdeps() {
         warning='SFML is required for LINK support, Fedora does not currently have a MinGW SFML package, if you want LINK support you will need to install it manually'
     fi
 
-    check sudo dnf -y --nogpgcheck --best --allowerasing install "$@"
+    [ -z "$rpms_installed" ] && check sudo dnf -y --nogpgcheck --best --allowerasing install "$@"
 
-    ffmpeg=ffmpeg-devel
-    [ -n $amd64 -a $target = m32 ] && ffmpeg=ffmpeg-devel.i686
-
-    if ! rpm -q $ffmpeg; then
+    if ! rpm -q $ffmpeg >/dev/null 2>&1; then
         warning 'ffmpeg failed to install (probably due to conflicts)'
         cmake_flags="$cmake_flags -DENABLE_FFMPEG=NO"
     fi
@@ -446,7 +528,7 @@ archlinux_installdeps() {
     # not using the base-devel group because it can break gcc-multilib
     check $pacman --noconfirm --needed -S binutils file grep gawk gzip libtool make patch sed util-linux nasm cmake pkg-config git
 
-    libs="zlib mesa cairo gettext libpng sdl2 openal wxgtk gtk2 gtk3 sfml ffmpeg"
+    libs="zlib mesa gettext libpng sdl2 openal wxgtk gtk2 gtk3 sfml ffmpeg"
 
     if [ -z "$target" -o "$target" = m32 ]; then
         if [ -z "$target" -o -z "$amd64" ]; then
@@ -519,7 +601,7 @@ EOF
 
         grep -Ev '^[ 	]*MAKEFLAGS=' "$MAKEPKG_CONF" > "$tmp/makepkg.conf"
 
-        export MAKEFLAGS="-j$(($(cat /proc/cpuinfo | grep -E '^processor	' | wc -l)+1))"
+        export MAKEFLAGS=$(jobs_flag)
         echo "MAKEFLAGS=\"$MAKEFLAGS\"" >> "$tmp/makepkg.conf"
 
         export MAKEPKG_CONF="$tmp/makepkg.conf"
@@ -622,7 +704,7 @@ solus_installdeps() {
     build_instructions
 }
 
-msys2_installdeps() {
+windows_installdeps() {
     msys2=1
 
     check_cross
@@ -632,7 +714,7 @@ msys2_installdeps() {
     check pacman -Sy
 
     set --
-    for p in SDL2 cairo ffmpeg openal sfml wxWidgets zlib binutils cmake crt-git extra-cmake-modules gcc gcc-libs gdb headers-git make pkg-config tools-git windows-default-manifest libmangle-git nasm; do
+    for p in SDL2 ffmpeg openal sfml wxWidgets zlib binutils cmake crt-git extra-cmake-modules gcc gcc-libs gdb headers-git make pkg-config tools-git windows-default-manifest libmangle-git nasm; do
         set -- "$@" "${target}-${p}"
     done
 
@@ -660,7 +742,7 @@ cd $(pwd)"
     build_instructions
 }
 
-osx_installdeps() {
+mac_installdeps() {
     if ! xcode-select -p >/dev/null 2>&1 && \
        ! pkgutil --pkg-info=com.apple.pkg.CLTools_Executables >/dev/null 2>&1 && \
        ! pkgutil --pkg-info=com.apple.pkg.DeveloperToolsCLI >/dev/null 2>&1; then
@@ -686,7 +768,7 @@ brew_installdeps() {
     check brew -v update
 
     set --
-    for f in cairo nasm cmake ffmpeg gettext libpng pkg-config sdl2 sfml wxmac; do
+    for f in nasm cmake ffmpeg gettext libpng pkg-config sdl2 sfml wxmac; do
         if brew info "$f" | grep -Eq '^Not installed$'; then
             set -- "$@" "$f"
         fi
@@ -703,7 +785,7 @@ macports_installdeps() {
     installing
 
     check sudo port -v selfupdate
-    check sudo port -v install cairo cmake nasm ffmpeg gettext libpng pkgconfig libsdl2 sfml wxWidgets-3.0 libiconv
+    check sudo port -v install cmake nasm ffmpeg gettext libpng pkgconfig libsdl2 sfml wxWidgets-3.0 libiconv
     check sudo port select wxWidgets wxWidgets-3.0
 
     build_instructions
@@ -714,11 +796,7 @@ fink_installdeps() {
     installing
 
     check sudo fink -vy selfupdate
-    check sudo fink -vy install cairo cmake nasm ffmpeg libgettext8-dev gettext-tools libpng16 pkgconfig sdl2 wxwidgets300-osxcocoa libiconv-dev
-
-    warning 'SFML is required for LINK support, there is currently no SFML package for Fink, if you want LINK support you will need to install it manually'
-
-    cmake_flags="$cmake_flags -DENABLE_LINK=NO"
+    check sudo fink -vy install cmake nasm ffmpeg libgettext8-dev gettext-tools libpng16 pkgconfig sdl2 wxwidgets300-osxcocoa libiconv-dev sfml24-dev
 
     build_instructions
 }
@@ -730,8 +808,8 @@ build_instructions() {
 
 $pre_build
 mkdir -p build && cd build
-$cmake .. $cmake_flags
-make -j8
+$CMAKE .. $cmake_flags
+make $(jobs_flag)
 $post_build
 
 EOF

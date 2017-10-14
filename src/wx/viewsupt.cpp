@@ -21,7 +21,7 @@ void Viewer::CloseDlg(wxCloseEvent& ev)
     Destroy();
 }
 
-Viewer::Viewer(const wxChar* name)
+Viewer::Viewer(const wxString& name)
     : wxDialog()
     , auto_update(false)
 {
@@ -138,7 +138,6 @@ void DisList::MoveSB()
     else
         pos = 250;
 
-    int sz = nlines > 20 ? 20 : nlines;
     sb.SetScrollbar(pos, 20, 500, 20);
 }
 
@@ -250,7 +249,7 @@ void DisList::SetSel()
             start += i;
             end += i + 1;
 #endif
-            tc.SetSelection(start, start + strings[i].size() + 1);
+            tc.SetSelection(start, end);
             return;
         }
 
@@ -563,7 +562,6 @@ void MemView::MoveSB()
     else
         pos = 250;
 
-    int sz = nlines > 20 ? 20 : nlines;
     sb.SetScrollbar(pos, 20, 500, 20);
 }
 
@@ -1077,7 +1075,7 @@ EVT_LEFT_UP(GfxPanel::Click)
 EVT_MOTION(GfxPanel::MouseMove)
 END_EVENT_TABLE()
 
-GfxViewer::GfxViewer(const wxChar* dname, int maxw, int maxh)
+GfxViewer::GfxViewer(const wxString& dname, int maxw, int maxh)
     : Viewer(dname)
     , image(maxw, maxh)
 {

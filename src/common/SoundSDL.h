@@ -23,9 +23,8 @@
 
 #include "SDL.h"
 
-class SoundSDL : public SoundDriver
-{
-        public:
+class SoundSDL : public SoundDriver {
+public:
         SoundSDL();
         virtual ~SoundSDL();
 
@@ -34,24 +33,31 @@ class SoundSDL : public SoundDriver
         virtual void reset();
         virtual void resume();
         virtual void write(uint16_t *finalWave, int length);
+        virtual void setThrottle(unsigned short throttle_);
 
-        private:
-        RingBuffer<uint16_t> _rbuf;
+protected:
+        static void soundCallback(void* data, uint8_t* stream, int length);
+        virtual void read(uint16_t* stream, int length);
+        virtual bool should_wait();
+        virtual std::size_t buffer_size();
+        virtual void deinit();
 
-        SDL_mutex *_mutex;
-        SDL_sem *_semBufferFull;
-        SDL_sem *_semBufferEmpty;
-        SDL_AudioDeviceID _dev;
+private:
+        RingBuffer<uint16_t> samples_buf;
 
-        int current_rate;
+        SDL_AudioDeviceID sound_device = -1;
 
-        bool _initialized;
+        SDL_mutex* mutex;
+        SDL_sem* data_available;
+        SDL_sem* data_read;
+        SDL_AudioSpec audio_spec;
+
+        unsigned short current_rate;
+
+        bool initialized = false;
 
         // Defines what delay in seconds we keep in the sound buffer
-        static const float _delay;
-
-        static void soundCallback(void *data, uint8_t *stream, int length);
-        virtual void read(uint16_t *stream, int length);
+        static const double buftime;
 };
 
 #endif // __VBA_SOUND_SDL_H__

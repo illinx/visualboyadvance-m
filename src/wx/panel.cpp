@@ -1,7 +1,9 @@
+#include <cmath>
+#include <cstring>
 #include <wx/dcbuffer.h>
 #include <SDL_joystick.h>
 
-#include "../../version.h"
+#include "version.h"
 #include "../common/ConfigManager.h"
 #include "../common/Patch.h"
 #include "../gb/gbPrinter.h"
@@ -79,7 +81,7 @@ void GameArea::LoadGame(const wxString& name)
 
     if (t == IMAGE_UNKNOWN) {
         wxString s;
-        s.Printf(_("%s is not a valid ROM file"), name.c_str());
+        s.Printf(_("%s is not a valid ROM file"), name.mb_str());
         wxMessageDialog dlg(GetParent(), s, _("Problem loading file"), wxOK | wxICON_ERROR);
         dlg.ShowModal();
         return;
@@ -136,7 +138,7 @@ void GameArea::LoadGame(const wxString& name)
     if (t == IMAGE_GB) {
         if (!gbLoadRom(fn)) {
             wxString s;
-            s.Printf(_("Unable to load Game Boy ROM %s"), name.c_str());
+            s.Printf(_("Unable to load Game Boy ROM %s"), name.mb_str());
             wxMessageDialog dlg(GetParent(), s, _("Problem loading file"), wxOK | wxICON_ERROR);
             dlg.ShowModal();
             return;
@@ -186,7 +188,7 @@ void GameArea::LoadGame(const wxString& name)
         gbCPUInit(fn, use_bios);
 
         if (use_bios && !useBios) {
-            wxLogError(_("Could not load BIOS %s"), (gbCgbMode ? gopts.gbc_bios : gopts.gb_bios).c_str());
+            wxLogError(_("Could not load BIOS %s"), (gbCgbMode ? gopts.gbc_bios : gopts.gb_bios).mb_str());
             // could clear use flag & file name now, but better to force
             // user to do it
         }
@@ -209,7 +211,7 @@ void GameArea::LoadGame(const wxString& name)
     {
         if (!(rom_size = CPULoadRom(fn))) {
             wxString s;
-            s.Printf(_("Unable to load Game Boy Advance ROM %s"), name.c_str());
+            s.Printf(_("Unable to load Game Boy Advance ROM %s"), name.mb_str());
             wxMessageDialog dlg(GetParent(), s, _("Problem loading file"), wxOK | wxICON_ERROR);
             dlg.ShowModal();
             return;
@@ -283,7 +285,7 @@ void GameArea::LoadGame(const wxString& name)
         CPUInit(gopts.gba_bios.mb_fn_str(), useBiosFileGBA);
 
         if (useBiosFileGBA && !useBios) {
-            wxLogError(_("Could not load BIOS %s"), gopts.gba_bios.c_str());
+            wxLogError(_("Could not load BIOS %s"), gopts.gba_bios.mb_str());
             // could clear use flag & file name now, but better to force
             // user to do it
         }
@@ -352,7 +354,7 @@ void GameArea::LoadGame(const wxString& name)
 
         if (emusys->emuReadBattery(fnb.data())) {
             wxString msg;
-            msg.Printf(_("Loaded battery %s"), bat.GetFullPath().c_str());
+            msg.Printf(_("Loaded battery %s"), bat.GetFullPath().mb_str());
             systemScreenMessage(msg);
 
             if (cpuSaveType == 0 && ovSaveType == 0 && t == IMAGE_GBA) {
@@ -568,7 +570,7 @@ bool GameArea::LoadState()
 bool GameArea::LoadState(int slot)
 {
     wxString fname;
-    fname.Printf(SAVESLOT_FMT, game_name().c_str(), slot);
+    fname.Printf(SAVESLOT_FMT, game_name().mb_str(), slot);
     return LoadState(wxFileName(statedir, fname));
 }
 
@@ -602,7 +604,7 @@ bool GameArea::LoadState(const wxFileName& fname)
 
     wxString msg;
     msg.Printf(ret ? _("Loaded state %s") : _("Error loading state %s"),
-        fname.GetFullPath().c_str());
+        fname.GetFullPath().mb_str());
     systemScreenMessage(msg);
     return ret;
 }
@@ -615,7 +617,7 @@ bool GameArea::SaveState()
 bool GameArea::SaveState(int slot)
 {
     wxString fname;
-    fname.Printf(SAVESLOT_FMT, game_name().c_str(), slot);
+    fname.Printf(SAVESLOT_FMT, game_name().mb_str(), slot);
     return SaveState(wxFileName(statedir, fname));
 }
 
@@ -626,7 +628,7 @@ bool GameArea::SaveState(const wxFileName& fname)
     wxGetApp().frame->update_state_ts(true);
     wxString msg;
     msg.Printf(ret ? _("Saved state %s") : _("Error saving state %s"),
-        fname.GetFullPath().c_str());
+        fname.GetFullPath().mb_str());
     systemScreenMessage(msg);
     return ret;
 }
@@ -657,9 +659,9 @@ void GameArea::SaveBattery(bool quiet)
     // of course some games just write battery way too often for such
     // a thing to be useful
     if (emusys->emuWriteBattery(fnb.data()))
-        msg.Printf(_("Wrote battery %s"), fn.c_str());
+        msg.Printf(_("Wrote battery %s"), fn.mb_str());
     else
-        msg.Printf(_("Error writing battery %s"), fn.c_str());
+        msg.Printf(_("Error writing battery %s"), fn.mb_str());
 
     systemSaveUpdateCounter = SYSTEM_SAVE_NOT_UPDATED;
 
@@ -1001,11 +1003,6 @@ void GameArea::OnIdle(wxIdleEvent& event)
             panel = new GLDrawingPanel(this, basic_width, basic_height);
             break;
 #endif
-#ifndef NO_CAIRO
-        case RND_CAIRO:
-            panel = new CairoDrawingPanel(this, basic_width, basic_height);
-            break;
-#endif
 #ifdef __WXMSW__
         case RND_DIRECT3D:
             panel = new DXDrawingPanel(this, basic_width, basic_height);
@@ -1023,6 +1020,7 @@ void GameArea::OnIdle(wxIdleEvent& event)
         w->Connect(wxEVT_PAINT,            wxPaintEventHandler(GameArea::PaintEv),         NULL, this);
         w->Connect(wxEVT_ERASE_BACKGROUND, wxEraseEventHandler(GameArea::EraseBackground), NULL, this);
         w->Connect(wxEVT_SIZE,             wxSizeEventHandler(GameArea::OnSize),           NULL, this);
+        this->Connect(wxEVT_SIZE,          wxSizeEventHandler(GameArea::OnSize),           NULL, this);
 
         w->SetBackgroundStyle(wxBG_STYLE_CUSTOM);
         w->SetSize(wxSize(basic_width, basic_height));
@@ -1233,6 +1231,15 @@ static bool process_key_press(bool down, int key, int mod, int joy = 0)
     }
 }
 
+static void draw_black_background(wxWindow* win) {
+    wxClientDC dc(win);
+    wxCoord w, h;
+    dc.GetSize(&w, &h);
+    dc.SetPen(*wxBLACK_PEN);
+    dc.SetBrush(*wxBLACK_BRUSH);
+    dc.DrawRectangle(0, 0, w, h);
+}
+
 void GameArea::OnKeyDown(wxKeyEvent& ev)
 {
     if (process_key_press(true, ev.GetKeyCode(), ev.GetModifiers())) {
@@ -1270,7 +1277,9 @@ void GameArea::EraseBackground(wxEraseEvent& ev)
 
 void GameArea::OnSize(wxSizeEvent& ev)
 {
-    panel->OnSize(ev);
+    draw_black_background(this);
+    if (panel)
+        panel->OnSize(ev);
 }
 
 void GameArea::OnSDLJoy(wxSDLJoyEvent& ev)
@@ -1414,11 +1423,7 @@ void DrawingPanelBase::PaintEv(wxPaintEvent& ev)
     if (!todraw) {
         // since this is set for custom background, not drawing anything
         // will cause garbage to be displayed, so draw a black area
-        wxCoord w, h;
-        dc.GetSize(&w, &h);
-        dc.SetPen(*wxBLACK_PEN);
-        dc.SetBrush(*wxBLACK_BRUSH);
-        dc.DrawRectangle(0, 0, w, h);
+        draw_black_background(GetWindow());
         return;
     }
 
@@ -1657,6 +1662,8 @@ public:
             done->Post();
             continue;
         }
+
+        return 0;
     }
 };
 
@@ -1775,15 +1782,18 @@ void DrawingPanelBase::DrawArea(uint8_t** data)
 
         if (panel->osdstat.size())
             drawText(todraw + outstride * (systemColorDepth != 24), outstride,
-                10, 20, panel->osdstat.utf8_str(), showSpeedTransparent);
+                10, 20, panel->osdstat.mb_str(), showSpeedTransparent);
 
         if (!disableStatusMessages && !panel->osdtext.empty()) {
             if (systemGetClock() - panel->osdtime < OSD_TIME) {
-                std::string message = ToString(panel->osdtext);
+                wxString message = panel->osdtext;
                 int linelen = std::ceil(width * scale - 20) / 8;
-                int nlines = (message.length() + linelen - 1) / linelen;
+                int nlines = (message.size() + linelen - 1) / linelen;
                 int cury = height - 14 - nlines * 10;
-                char* ptr = const_cast<char*>(message.c_str());
+                const char* msg_data = message.mb_str();
+                char buf[message.size() + 1];
+                char* ptr = &buf[0];
+                std::strncpy(ptr, msg_data, message.size() + 1);
 
                 while (nlines > 1) {
                     char lchar = ptr[linelen];
@@ -2198,124 +2208,6 @@ void GLDrawingPanel::DrawArea(wxWindowDC& dc)
 
 #endif // GL support
 
-#ifndef NO_CAIRO
-
-CairoDrawingPanel::CairoDrawingPanel(wxWindow* parent, int _width, int _height)
-    : DrawingPanel(parent, _width, _height)
-{
-    conv_surf = NULL;
-
-    // Intialize color tables in reverse order from default
-    // probably doesn't help mmx hq3x/hq4x
-    if (systemColorDepth == 32) {
-#if wxBYTE_ORDER == wxLITTLE_ENDIAN
-        systemBlueShift = 3;
-        systemRedShift = 19;
-#else
-        systemBlueShift = 27;
-        systemRedShift = 11;
-#endif
-    }
-
-    // FIXME: should be "true" for GBA carts if lcd mode selected
-    utilUpdateSystemColorMaps(false);
-
-    if (!did_init) DrawingPanelInit();
-}
-
-CairoDrawingPanel::~CairoDrawingPanel()
-{
-    if (conv_surf)
-        cairo_surface_destroy(conv_surf);
-}
-
-#include <wx/graphics.h>
-#ifdef __WXMSW__
-#include <cairo-win32.h>
-#include <gdiplus.h>
-#endif
-#if defined(__WXMAC__) && wxMAC_USE_CORE_GRAPHICS
-#include <cairo-quartz.h>
-#endif
-
-void CairoDrawingPanel::DrawArea(wxWindowDC& dc)
-{
-    cairo_t* cr;
-    wxGraphicsContext* gc = wxGraphicsContext::Create(dc);
-#ifdef __WXMSW__
-    // not sure why this is so slow
-    // doing this only once in constructor and resize handler doesn't seem
-    // to help, and may be unsafe
-    Gdiplus::Graphics* gr = (Gdiplus::Graphics*)gc->GetNativeContext();
-    cairo_surface_t* s = cairo_win32_surface_create(gr->GetHDC());
-    cr = cairo_create(s);
-    cairo_surface_destroy(s);
-#else
-#ifdef __WXGTK__
-    cr = cairo_reference((cairo_t*)gc->GetNativeContext());
-#else
-#if defined(__WXMAC__) && wxMAC_USE_CORE_GRAPHICS
-    CGContextRef c = static_cast<CGContextRef>(gc->GetNativeContext());
-    cairo_surface_t* s = cairo_quartz_surface_create_for_cg_context(c, width, height);
-    cr = cairo_create(s);
-    cairo_surface_destroy(s);
-#else
-#error Cairo rendering is not supported on this platform
-#endif
-#endif
-#endif
-    cairo_surface_t* surf;
-
-    if (!out_16)
-        surf = cairo_image_surface_create_for_data(todraw + 4 * width,
-            CAIRO_FORMAT_RGB24,
-            width, height,
-            4 * (width + 1));
-    else {
-        if (!conv_surf)
-            conv_surf = cairo_image_surface_create(CAIRO_FORMAT_RGB24,
-                std::ceil(width * scale),
-                std::ceil(height * scale));
-
-        if (!conv_surf) {
-            wxLogError(_("Cannot create conversion buffer"));
-            wxGetApp().frame->Close(true);
-        }
-
-        surf = cairo_surface_reference(conv_surf);
-        uint16_t* src = (uint16_t*)todraw + (int)std::ceil((width + 2) * scale); // skip top border
-        uint32_t* dst = (uint32_t*)cairo_image_surface_get_data(surf);
-
-        for (int y = 0; y < std::ceil(height * scale); y++) {
-            for (int x = 0; x < std::ceil(width * scale); x++, src++) {
-                *dst++ = (((*src >> systemRedShift) & 0x1f) << 19) | (((*src >> systemGreenShift) & 0x1f) << 11) | (((*src >> systemBlueShift) & 0x1f) << 3);
-            }
-
-            src += 2; // skip rhs border
-        }
-    }
-
-    cairo_pattern_t* pat = cairo_pattern_create_for_surface(surf);
-    // GOOD is "similar to" bilinear, and FAST is "similar to" nearest
-    // could also just use BILINEAR and NEAREST directly, I suppose
-    cairo_pattern_set_filter(pat, gopts.bilinear ? CAIRO_FILTER_GOOD : CAIRO_FILTER_FAST);
-    double sx, sy;
-    int w, h;
-    GetClientSize(&w, &h);
-    sx = (double)width / w;
-    sy = (double)height / h;
-    cairo_matrix_t mat;
-    cairo_matrix_init_scale(&mat, sx, sy);
-    cairo_pattern_set_matrix(pat, &mat);
-    cairo_set_source(cr, pat);
-    cairo_paint(cr);
-    cairo_pattern_destroy(pat);
-    cairo_surface_destroy(surf);
-    cairo_destroy(cr);
-    delete gc;
-}
-#endif
-
 #if defined(__WXMSW__) && !defined(NO_D3D)
 #define DIRECT3D_VERSION 0x0900
 #include <d3d9.h>
@@ -2335,7 +2227,7 @@ void DXDrawingPanel::DrawArea(wxWindowDC& dc)
 #endif
 
 #ifndef NO_FFMPEG
-static const wxChar* media_err(MediaRet ret)
+static const wxString media_err(MediaRet ret)
 {
     switch (ret) {
     case MRET_OK:
@@ -2370,7 +2262,7 @@ void GameArea::StartVidRecording(const wxString& fname)
     if ((ret = vid_rec.Record(fnb.data(), basic_width, basic_height,
              systemColorDepth))
         != MRET_OK)
-        wxLogError(_("Unable to begin recording to %s (%s)"), fname.c_str(),
+        wxLogError(_("Unable to begin recording to %s (%s)"), fname.mb_str(),
             media_err(ret));
     else {
         MainFrame* mf = wxGetApp().frame;
@@ -2401,7 +2293,7 @@ void GameArea::StartSoundRecording(const wxString& fname)
     MediaRet ret;
 
     if ((ret = snd_rec.Record(fnb.data())) != MRET_OK)
-        wxLogError(_("Unable to begin recording to %s (%s)"), fname.c_str(),
+        wxLogError(_("Unable to begin recording to %s (%s)"), fname.mb_str(),
             media_err(ret));
     else {
         MainFrame* mf = wxGetApp().frame;

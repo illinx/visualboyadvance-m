@@ -44,7 +44,7 @@
     #undef  wxLogDebug
     #define wxLogDebug(...)                                                                                                           \
     do {                                                                                                                              \
-        fputs(wxString::Format(wxDateTime::UNow().Format(wxT("%X")) + wxT(": Debug: ") + __VA_ARGS__).utf8_str(), VBAM_DEBUG_STREAM); \
+        fputs(wxString::Format(wxDateTime::UNow().Format(wxT("%X")) + wxT(": Debug: ") + __VA_ARGS__).mb_str(), VBAM_DEBUG_STREAM); \
         fputc('\n', VBAM_DEBUG_STREAM);                                                                                               \
     } while(0)
 #endif
@@ -134,6 +134,9 @@ public:
             return false;
         }
     }
+
+    virtual ~wxvbamApp();
+
 protected:
     bool using_wayland;
 
@@ -316,6 +319,8 @@ public:
     {
         return (paused && !pause_next && !incendental) || menus_opened || dialog_opened;
     }
+protected:
+    virtual void BindAppIcon();
 
 private:
     GameArea* panel;
@@ -436,7 +441,6 @@ enum ifbfunc {
 enum renderer {
     RND_SIMPLE,
     RND_OPENGL,
-    RND_CAIRO,
     RND_DIRECT3D,
     RND_QUARTZ2D,
 };
@@ -633,7 +637,7 @@ void systemScreenMessage(const wxString& msg);
 // sorted by cmd field for binary searching
 // filled in by copy-events.cmake
 extern struct cmditem {
-    const wxChar *cmd, *name;
+    const wxString cmd, name;
     int cmd_id;
     int mask_flags; // if non-0, one of the flags must be turned on in win
     // to enable this command

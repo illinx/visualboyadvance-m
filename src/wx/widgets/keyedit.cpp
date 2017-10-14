@@ -165,7 +165,7 @@ wxString wxKeyTextCtrl::ToString(wxAcceleratorEntry_v keys, wxChar sep)
     return ret;
 }
 
-bool wxKeyTextCtrl::ParseString(const wxChar* s, int len, int& mod, int& key)
+bool wxKeyTextCtrl::ParseString(const wxString& s, int len, int& mod, int& key)
 {
     mod = key = 0;
 
@@ -173,7 +173,7 @@ bool wxKeyTextCtrl::ParseString(const wxChar* s, int len, int& mod, int& key)
         return false;
 
     wxString a = wxT('\t');
-    a.append(s, len);
+    a.Append(s.Left(len));
     wxAcceleratorEntry ae;
 #ifndef __WXMAC__
 #define check_meta(str)                                                     \
@@ -245,7 +245,7 @@ bool wxKeyTextCtrl::ParseString(const wxChar* s, int len, int& mod, int& key)
 
 bool wxKeyTextCtrl::FromString(const wxString& s, int& mod, int& key)
 {
-    return ParseString(s.c_str(), s.size(), mod, key);
+    return ParseString(s, s.size(), mod, key);
 }
 
 wxAcceleratorEntry_v wxKeyTextCtrl::FromString(const wxString& s, wxChar sep)
@@ -264,14 +264,14 @@ wxAcceleratorEntry_v wxKeyTextCtrl::FromString(const wxString& s, wxChar sep)
                 continue;
         }
 
-        if (!ParseString(s.c_str() + lastkey + 1, len - lastkey - 1, mod, key))
+        if (!ParseString(s.Mid(lastkey + 1), len - lastkey - 1, mod, key))
             return empty;
 
         ret.insert(ret.begin(), wxAcceleratorEntry(mod, key));
         len = lastkey;
     }
 
-    if (!ParseString(s.c_str(), len, mod, key))
+    if (!ParseString(s, len, mod, key))
         return empty;
 
     ret.insert(ret.begin(), wxAcceleratorEntry(mod, key));

@@ -1,3 +1,8 @@
+// necessary to get portable strerror_r
+#undef _GNU_SOURCE
+#include <string.h>
+#define _GNU_SOURCE 1
+
 #include "ConfigManager.h"
 extern "C" {
 #include "../common/iniparser.h"
@@ -10,9 +15,7 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <cmath>
-
-#include "../AutoBuild.h"
-#include "../version.h"
+#include <cerrno>
 
 #include "../common/Patch.h"
 #include "../common/ConfigManager.h"
@@ -759,7 +762,13 @@ void SaveConfigFile()
 	{
 		FILE *f = fopen(configFile, "w");
 		if (f == NULL) {
-			log("Configuration file could not be opened %s\n", optarg);
+                        char err_msg[4096] = "unknown error";
+#ifdef _WIN32
+                        strerror_s(err_msg, errno, 4096);
+#else
+                        strerror_r(errno, err_msg, 4096);
+#endif
+			fprintf(stderr, "Configuration file '%s' could not be written to: %s\n", configFile, err_msg);
 			return;
 		}
 		// Needs mixed case version of the option name to add new options into the ini
