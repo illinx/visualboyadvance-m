@@ -435,6 +435,7 @@ variable_desc saveGameStruct[] = {
     { &TM3D, sizeof(uint16_t) },
     { &TM3CNT, sizeof(uint16_t) },
     { &P1, sizeof(uint16_t) },
+	{ &P2, sizeof(uint16_t) },
     { &IE, sizeof(uint16_t) },
     { &IF, sizeof(uint16_t) },
     { &IME, sizeof(uint16_t) },
@@ -3014,7 +3015,8 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         if (changeBGon) {
             layerEnableDelay = 4;
             coreOptions.layerEnable = coreOptions.layerSettings & value & (~changeBGon);
-        } else {
+        }
+        else {
             coreOptions.layerEnable = coreOptions.layerSettings & value;
             // CPUUpdateTicks();
         }
@@ -3226,13 +3228,17 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
     case IO_REG_SOUNDCNT_X:
         if (address == IO_REG_SOUND1CNT_L) {
             value &= 0x007F;
-        } else if (address == IO_REG_SOUND1CNT_H) {
+        }
+        else if (address == IO_REG_SOUND1CNT_H) {
             value &= 0xFFC0;
-        } else if (address == IO_REG_SOUND1CNT_X) {
+        }
+        else if (address == IO_REG_SOUND1CNT_X) {
             value &= 0xFFC0;
-        } else if (address == IO_REG_SOUNDCNT_L) {
+        }
+        else if (address == IO_REG_SOUNDCNT_L) {
             value &= 0xFF77;
-        } else if (address == IO_REG_SOUNDCNT_X) {
+        }
+        else if (address == IO_REG_SOUNDCNT_X) {
             value &= 0x0080;
         }
         soundEvent8(address & 0xFF, (uint8_t)(value & 0xFF));
@@ -3464,6 +3470,12 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         UPDATE_REG(IO_REG_KEYCNT, value & 0xC3FF);
         break;
 
+    case IO_REG_KEY2INPUT:
+        if (gba2Mode) {
+            P2 |= (value & 0x3FF);
+            UPDATE_REG(IO_REG_KEY2INPUT, P2);
+        }
+		break;
 
     case COMM_RCNT:
 #ifndef NO_LINK
@@ -3716,8 +3728,10 @@ void CPUInit(const char* biosFileName, bool useBiosFile)
         ioReadable[i] = false;
     for (i = 0x12c; i < 0x130; i++)
         ioReadable[i] = false;
-    for (i = 0x138; i < 0x140; i++)
-        ioReadable[i] = false;
+    if (!gba2Mode) {
+        for (i = 0x138; i < 0x140; i++)
+            ioReadable[i] = false;
+    }
     for (i = 0x142; i < 0x150; i++)
         ioReadable[i] = false;
     for (i = 0x15a; i < 0x200; i++)
@@ -3891,6 +3905,7 @@ void CPUReset()
     TM3D = 0x0000;
     TM3CNT = 0x0000;
     P1 = 0x03FF;
+	P2 = 0x03FF;
     IE = 0x0000;
     IF = 0x0000;
     IME = 0x0000;
@@ -3928,6 +3943,10 @@ void CPUReset()
     UPDATE_REG(IO_REG_BG3PD, BG3PD);
     UPDATE_REG(IO_REG_KEYINPUT, P1);
     UPDATE_REG(IO_REG_SOUNDBIAS, 0x200);
+
+    if (gba2Mode) {
+        UPDATE_REG(IO_REG_KEY2INPUT, P2);
+    }
 
     // disable FIQ
     reg[16].I |= 0x40;
@@ -4063,6 +4082,7 @@ void CPUInterrupt()
 }
 
 static uint32_t joy;
+static uint32_t joy2;
 static bool has_frames;
 
 void CPULoop(int ticks)
@@ -4216,6 +4236,12 @@ void CPULoop(int ticks)
                             P1 = 0x03FF ^ (joy & 0x3FF);
                             systemUpdateMotionSensor();
                             UPDATE_REG(IO_REG_KEYINPUT, P1);
+
+                            if (gba2Mode) {
+                                P2 = 0x03FF ^ (joy2 & 0x3FF);
+                                UPDATE_REG(IO_REG_KEY2INPUT, P2);
+                            }
+							
                             uint16_t P1CNT = READ16LE(((uint16_t*)&g_ioMem[0x132]));
 
                             // this seems wrong, but there are cases where the game
@@ -4678,9 +4704,17 @@ void GBAEmulate(int ticks)
     has_frames = false;
 
     // update joystick information
-    if (systemReadJoypads())
-        // read default joystick
-        joy = systemReadJoypad(-1);
+    if (systemReadJoypads()) {
+        if (gba2Mode) {
+            joy2 = systemReadJoypad(1);
+            joy = systemReadJoypad(0);
+		}
+        else {
+            // read default joystick
+            joy = systemReadJoypad(-1);
+        }
+    }
+        
 
     // Runs nth number of ticks till vblank, outputs audio
     // then the video frames.

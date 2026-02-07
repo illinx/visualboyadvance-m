@@ -388,6 +388,7 @@ enum ioRegs {
     IO_REG_SIOCNT       = 0x0128,
     IO_REG_RCNT         = 0x0134,
     IO_REG_IR           = 0x0136,
+	IO_REG_KEY2INPUT    = 0x0138,
     IO_REG_UNKNOWN_1    = 0x0142,
     IO_REG_UNKNOWN_2    = 0x015A,
 
