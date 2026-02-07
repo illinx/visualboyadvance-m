@@ -4706,8 +4706,8 @@ void GBAEmulate(int ticks)
     // update joystick information
     if (systemReadJoypads()) {
         if (gba2Mode) {
-            joy2 = systemReadJoypad(1);
             joy = systemReadJoypad(0);
+            joy2 = systemReadJoypad(1);
 		}
         else {
             // read default joystick
