@@ -279,7 +279,7 @@ void OpenPreferences(const char *name)
 
 void ValidateConfig()
 {
-	if (gbEmulatorType > 5)
+	if (gbEmulatorType > 6)
 		gbEmulatorType = 1;
 	if (gbPaletteOption > 2)
 		gbPaletteOption = 0;

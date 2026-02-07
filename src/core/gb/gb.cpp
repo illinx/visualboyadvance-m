@@ -2686,7 +2686,7 @@ void gbGetHardwareType()
     gbCgbMode = false;
     gbSgbMode = false;
     if ((gbEmulatorType == 0 && g_gbCartData.SupportsCGB()) ||
-        gbEmulatorType == 1 || gbEmulatorType == 4) {
+        gbEmulatorType == 1 || gbEmulatorType == 4 || gbEmulatorType == 6) {
         gbCgbMode = true;
     }
 
@@ -2701,7 +2701,7 @@ void gbGetHardwareType()
     else if ((gbSgbMode && (gbEmulatorType == 0)) || (gbEmulatorType == 2) ||
              (gbEmulatorType == 5))
         gbHardware = 4; // SGB(2)
-    else if (gbEmulatorType == 4)
+    else if (gbEmulatorType == 4 || gbEmulatorType == 6)
         gbHardware = 8; // GBA
 
     gbGBCColorType = 0;

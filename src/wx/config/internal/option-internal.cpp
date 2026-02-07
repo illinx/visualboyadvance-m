@@ -347,7 +347,7 @@ std::array<Option, kNbOptions>& Option::All() {
         Option(OptionID::kPrefCaptureFormat, &g_owned_opts.capture_format, 0, 1),
         Option(OptionID::kPrefCheatsEnabled, &coreOptions.cheatsEnabled, 0, 1),
         Option(OptionID::kPrefDisableStatus, &g_owned_opts.disable_status_messages),
-        Option(OptionID::kPrefEmulatorType, &gbEmulatorType, 0, 5),
+        Option(OptionID::kPrefEmulatorType, &gbEmulatorType, 0, 6),
         Option(OptionID::kPrefFlashSize, &g_owned_opts.flash_size, 0, 1),
         Option(OptionID::kPrefFrameSkip, &g_owned_opts.frame_skip, -1, 9),
         Option(OptionID::kPrefGBPaletteOption, &gbPaletteOption, 0, 2),
