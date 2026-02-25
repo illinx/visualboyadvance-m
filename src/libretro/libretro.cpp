@@ -1296,8 +1296,6 @@ static void update_variables_gb(bool startup) {
             gbEmulatorType = 4;
         else if (strcmp(var.value, "sgb2") == 0)
             gbEmulatorType = 5;
-        else if (strcmp(var.value, "gba2") == 0)
-			gbEmulatorType = 6;
     }
 
     var.key = "vbam_allowcolorizerhack";
