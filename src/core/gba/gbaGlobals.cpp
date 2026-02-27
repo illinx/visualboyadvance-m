@@ -21,9 +21,6 @@ uint32_t stop = 0x08000568;
 bool gba_joybus_enabled = false;
 bool gba_joybus_active = false;
 
-// GBA2
-bool gba2Mode = true;	//TODO: set for real
-
 // this is an optional hack to change the backdrop/background color:
 // -1: disabled
 // 0x0000 to 0x7FFF: set custom 15 bit color

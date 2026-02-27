@@ -195,6 +195,7 @@ struct option argOptions[] = {
 	{ "gb-frame-skip", required_argument, 0, OPT_GB_FRAME_SKIP },
 	{ "gb-palette-option", required_argument, 0, OPT_GB_PALETTE_OPTION },
 	{ "gb-printer", no_argument, &coreOptions.gbPrinterEnabled, 1 },
+	{ "gba2", no_argument, &coreOptions.gba2Enabled, 1},
 	{ "gdb", required_argument, 0, 'G' },
 	{ "help", no_argument, &optPrintUsage, 1 },
 	{ "ifb-filter", required_argument, 0, 'I' },
@@ -356,6 +357,7 @@ void LoadConfig()
 	coreOptions.speedup_mute = ReadPref("speedupMute", 1);
 	coreOptions.useBios = ReadPrefHex("useBiosGBA");
 	coreOptions.gbPrinterEnabled = ReadPref("gbPrinter", 0);
+	coreOptions.gba2Enabled = ReadPref("gba2Enabled", 0);
 
 	int soundQuality = (ReadPrefHex("soundQuality", 1));
 	switch (soundQuality) {

@@ -2490,6 +2490,11 @@ EVT_HANDLER_MASK(GBALcdFilter, "Enable LCD filter", CMDEN_GBA)
     GetMenuOptionConfig("GBALcdFilter", config::OptionID::kGBALCDFilter);
 }
 
+EVT_HANDLER_MASK(GBA2Enabled, "Enable 2nd Controller", CMDEN_GBA)
+{
+    GetMenuOptionConfig("GBA2Enabled", config::OptionID::kPrefGBA2Enabled);
+}
+
 EVT_HANDLER_MASK(GBLcdFilter, "Enable LCD filter", CMDEN_GB)
 {
     GetMenuOptionConfig("GBLcdFilter", config::OptionID::kGBLCDFilter);

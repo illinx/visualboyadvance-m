@@ -374,6 +374,7 @@ std::array<Option, kNbOptions>& Option::All() {
         Option(OptionID::kPrefUseBiosGBA, &g_owned_opts.use_bios_file_gba),
         Option(OptionID::kPrefUseBiosGBC, &g_owned_opts.use_bios_file_gbc),
         Option(OptionID::kPrefVsync, &g_owned_opts.vsync),
+        Option(OptionID::kPrefGBA2Enabled, &coreOptions.gba2Enabled, 0, 1),
 
         /// Geometry
         Option(OptionID::kGeomFullScreen, &g_owned_opts.fullscreen),
@@ -582,6 +583,7 @@ const std::array<OptionData, kNbOptions + 1> kAllOptionsData = {
     OptionData{"preferences/useBiosGBC", "BootRomGBC",
                _("Use the specified BIOS file for Game Boy Color")},
     OptionData{"preferences/vsync", "VSync", _("Wait for vertical sync")},
+    OptionData{"preferences/gba2Enabled", "GBA2Enabled", _("Enable 2nd Controller")},
 
     /// Geometry
     OptionData{"geometry/fullScreen", "Fullscreen", _("Enter fullscreen mode at startup")},

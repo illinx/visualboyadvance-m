@@ -3471,7 +3471,7 @@ void CPUUpdateRegister(uint32_t address, uint16_t value)
         break;
 
     case IO_REG_KEY2INPUT:
-        if (gba2Mode) {
+        if (coreOptions.gba2Enabled) {
             P2 |= (value & 0x3FF);
             UPDATE_REG(IO_REG_KEY2INPUT, P2);
         }
@@ -3728,7 +3728,7 @@ void CPUInit(const char* biosFileName, bool useBiosFile)
         ioReadable[i] = false;
     for (i = 0x12c; i < 0x130; i++)
         ioReadable[i] = false;
-    if (!gba2Mode) {
+    if (!coreOptions.gba2Enabled) {
         for (i = 0x138; i < 0x140; i++)
             ioReadable[i] = false;
     }
@@ -3944,7 +3944,7 @@ void CPUReset()
     UPDATE_REG(IO_REG_KEYINPUT, P1);
     UPDATE_REG(IO_REG_SOUNDBIAS, 0x200);
 
-    if (gba2Mode) {
+    if (coreOptions.gba2Enabled) {
         UPDATE_REG(IO_REG_KEY2INPUT, P2);
     }
 
@@ -4237,7 +4237,7 @@ void CPULoop(int ticks)
                             systemUpdateMotionSensor();
                             UPDATE_REG(IO_REG_KEYINPUT, P1);
 
-                            if (gba2Mode) {
+                            if (coreOptions.gba2Enabled) {
                                 P2 = 0x03FF ^ (joy2 & 0x3FF);
                                 UPDATE_REG(IO_REG_KEY2INPUT, P2);
                             }
@@ -4705,7 +4705,7 @@ void GBAEmulate(int ticks)
 
     // update joystick information
     if (systemReadJoypads()) {
-        if (gba2Mode) {
+        if (coreOptions.gba2Enabled) {
             joy = systemReadJoypad(0);
             joy2 = systemReadJoypad(1);
 		}

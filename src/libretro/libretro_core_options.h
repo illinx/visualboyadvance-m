@@ -428,6 +428,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
         "0"
     },
     {
+        "vbam_gba2enabled",
+        "GBA2 Enabled",
+        NULL,
+        "Enable GBA2 2nd controller support.",
+        NULL,
+        "system",
+        {
+            { "disabled", NULL },
+            { "enabled",  NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
         "vbam_astick_deadzone",
         "Sensors Deadzone (%)",
         NULL,

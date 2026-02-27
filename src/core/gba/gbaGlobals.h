@@ -45,7 +45,6 @@ extern int armMode;
 extern uint32_t stop;
 extern bool gba_joybus_enabled;
 extern bool gba_joybus_active;
-extern bool gba2Mode;
 extern int customBackdropColor;
 
 extern uint8_t* g_bios;

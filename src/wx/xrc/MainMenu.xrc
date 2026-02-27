@@ -506,6 +506,10 @@
           <label>_LCD Filter</label>
           <checkable>1</checkable>
         </object>
+        <object class="wxMenuItem" name="GBA2Enabled">
+          <label>_GBA2 2nd Controller</label>
+          <checkable>1</checkable>
+        </object>
       </object>
       <object class="wxMenu">
         <label translate="0">_Game Boy</label>
