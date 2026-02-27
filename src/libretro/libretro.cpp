@@ -1413,10 +1413,10 @@ static void update_variables_gba() {
     var.key = "vbam_gba2enabled";
     var.value = NULL;
     if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
-        coreOptions.gba2Mode = !strcmp(var.value, "enabled");
+        coreOptions.gba2Enabled = !strcmp(var.value, "enabled");
     }
 
-    char options[4][35] = {
+    char options[5][35] = {
         "vbam_soundinterpolation",
         "vbam_soundfiltering",
         "vbam_forceRTCenable",
