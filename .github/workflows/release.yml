@@ -57,7 +57,9 @@ jobs:
         with:
           submodules: recursive
       - name: Install dependencies
-        run: bash installdeps
+        run: |
+          bash installdeps
+          brew install libdeflate
       - name: Configure
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF -DBUNDLE_DYLIBS=ON
       - name: Build
