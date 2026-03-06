@@ -1,0 +1,198 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+      - name: Configure
+        run: >-
+          cmake -B build -G Ninja -DBUILD_TESTING=OFF -DCOMPILE_ONLY=TRUE
+          -DUPSTREAM_RELEASE=FALSE -DVCPKG_TARGET_TRIPLET=x64-windows-static
+          -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-windows-x64
+          path: build/visualboyadvance-m.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo add-apt-repository ppa:hrzhu/sdl3-backport
+          sudo apt update
+          bash installdeps
+      - name: Configure
+        run: >-
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+      - name: Build
+        run: ninja -C build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-linux-x64
+          path: build/visualboyadvance-m
+
+  build-macos:
+    runs-on: macos-latest
+    env:
+      NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Configure
+        run: nix-shell --command 'cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF'
+      - name: Build
+        run: nix-shell --command 'ninja -C build'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-macos
+          path: build/visualboyadvance-m
+
+  build-libretro-windows:
+    runs-on: windows-latest
+    env:
+      MSYSTEM: CLANG64
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Configure git line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+      - name: Install deps
+        run: bash installdeps
+      - name: Build
+        run: make -C src/libretro DEBUG=0 CC=clang CXX=clang++ SHARED="-shared -static-libgcc -static-libstdc++ -Wl,-no-undefined"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-libretro-windows-x64
+          path: src/libretro/vbam_libretro.dll
+
+  build-libretro-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install dependencies
+        run: |
+          sudo add-apt-repository ppa:hrzhu/sdl3-backport
+          sudo apt update
+          bash installdeps
+      - name: Build
+        run: make -C src/libretro DEBUG=0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-libretro-linux-x64
+          path: src/libretro/vbam_libretro.so
+
+  build-libretro-macos:
+    runs-on: macos-latest
+    env:
+      NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Build
+        run: nix-shell --command 'make -C src/libretro DEBUG=0'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-libretro-macos
+          path: src/libretro/vbam_libretro.dylib
+
+  build-libretro-ngc:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitppc:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build
+        run: make -C src/libretro DEBUG=0 platform=ngc
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-libretro-ngc
+          path: src/libretro/vbam_libretro_ngc.a
+
+  build-libretro-wii:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitppc:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build
+        run: make -C src/libretro DEBUG=0 platform=wii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-libretro-wii
+          path: src/libretro/vbam_libretro_wii.a
+
+  build-libretro-wiiu:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkitppc:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build
+        run: make -C src/libretro DEBUG=0 platform=wiiu
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-libretro-wiiu
+          path: src/libretro/vbam_libretro_wiiu.a
+
+  release:
+    needs:
+      - build-windows
+      - build-linux
+      - build-macos
+      - build-libretro-windows
+      - build-libretro-linux
+      - build-libretro-macos
+      - build-libretro-ngc
+      - build-libretro-wii
+      - build-libretro-wiiu
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
