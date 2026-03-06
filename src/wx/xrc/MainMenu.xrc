@@ -507,7 +507,7 @@
           <checkable>1</checkable>
         </object>
         <object class="wxMenuItem" name="GBA2Enabled">
-          <label>_GBA2 2nd Controller</label>
+          <label>_Enable 2P Support</label>
           <checkable>1</checkable>
         </object>
       </object>
