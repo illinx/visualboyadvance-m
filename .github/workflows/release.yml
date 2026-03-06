@@ -50,7 +50,7 @@ jobs:
           name: vbam-linux-x64
           path: build/visualboyadvance-m
 
-  build-macos:
+  build-macos-arm64:
     runs-on: macos-latest
     env:
       NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM: 1
@@ -62,12 +62,32 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - name: Configure
-        run: nix-shell --command 'cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF'
+        run: nix-shell --command 'cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF -DBUNDLE_DYLIBS=ON'
       - name: Build
         run: nix-shell --command 'ninja -C build'
       - uses: actions/upload-artifact@v4
         with:
-          name: vbam-macos
+          name: vbam-macos-arm64
+          path: build/visualboyadvance-m.app
+
+  build-macos-x64:
+    runs-on: macos-13
+    env:
+      NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Configure
+        run: nix-shell --command 'cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF -DBUNDLE_DYLIBS=ON'
+      - name: Build
+        run: nix-shell --command 'ninja -C build'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vbam-macos-x64
           path: build/visualboyadvance-m.app
 
   build-libretro-windows:
@@ -179,7 +199,8 @@ jobs:
     needs:
       - build-windows
       - build-linux
-      - build-macos
+      - build-macos-arm64
+      - build-macos-x64
       - build-libretro-windows
       - build-libretro-linux
       - build-libretro-macos
@@ -193,26 +214,27 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true
       - name: Package artifacts into platform zips
         working-directory: artifacts
         run: |
           package() {
-            local dir="$1"; shift
-            mkdir "$dir"
-            for f in "$@"; do [ -e "$f" ] && mv "$f" "$dir/"; done
-            [ "$(ls -A $dir)" ] && zip -r "${dir}.zip" "$dir"
-            rm -rf "$dir"
+            local zipname="$1" artifact="$2" file="$3"
+            [ -e "${artifact}/${file}" ] || return 0
+            mkdir "$zipname"
+            mv "${artifact}/${file}" "$zipname/"
+            zip -r "${zipname}.zip" "$zipname/"
+            rm -rf "$zipname/" "$artifact/"
           }
-          package linux-x64          visualboyadvance-m
-          package windows-x64        visualboyadvance-m.exe
-          package macos               visualboyadvance-m.app
-          package libretro-linux-x64  vbam_libretro.so
-          package libretro-windows-x64 vbam_libretro.dll
-          package libretro-macos      vbam_libretro.dylib
-          package libretro-ngc        vbam_libretro_ngc.a
-          package libretro-wii        vbam_libretro_wii.a
-          package libretro-wiiu       vbam_libretro_wiiu.a
+          package linux-x64           vbam-linux-x64           visualboyadvance-m
+          package windows-x64         vbam-windows-x64         visualboyadvance-m.exe
+          package macos-arm64          vbam-macos-arm64         visualboyadvance-m.app
+          package macos-x64            vbam-macos-x64           visualboyadvance-m.app
+          package libretro-linux-x64   vbam-libretro-linux-x64  vbam_libretro.so
+          package libretro-windows-x64 vbam-libretro-windows-x64 vbam_libretro.dll
+          package libretro-macos       vbam-libretro-macos      vbam_libretro.dylib
+          package libretro-ngc         vbam-libretro-ngc        vbam_libretro_ngc.a
+          package libretro-wii         vbam-libretro-wii        vbam_libretro_wii.a
+          package libretro-wiiu        vbam-libretro-wiiu       vbam_libretro_wiiu.a
       - uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
