@@ -80,3 +80,9 @@ jobs:
       - if: matrix.build_options == 'default'
         name: Run tests
         run: cd build && xvfb-run ctest -j --output-on-failure
+      - if: matrix.build_options == 'default' && matrix.build_type == 'release' && matrix.build_compiler == 'gcc'
+        name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vbam-linux-x64
+          path: build/visualboyadvance-m
