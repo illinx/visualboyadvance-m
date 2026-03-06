@@ -54,6 +54,14 @@ jobs:
       - name: Build
         run: cmake --build build
 
+      # Upload release artifact for testers
+      - if: matrix.build_type == 'release' && matrix.build_options == 'default' && matrix.msvc_arch == 'x64'
+        name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vbam-windows-x64
+          path: build/visualboyadvance-m.exe
+
       # Run tests
 #      - if: matrix.build_options == 'default' && matrix.msvc_arch != 'amd64_arm64'
 #        name: Run tests
