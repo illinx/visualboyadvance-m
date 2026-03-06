@@ -50,7 +50,7 @@ jobs:
           name: vbam-linux-x64
           path: build/visualboyadvance-m
 
-  build-macos-arm64:
+  build-macos:
     runs-on: macos-latest
     env:
       NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM: 1
@@ -67,27 +67,7 @@ jobs:
         run: nix-shell --command 'ninja -C build'
       - uses: actions/upload-artifact@v4
         with:
-          name: vbam-macos-arm64
-          path: build/visualboyadvance-m.app
-
-  build-macos-x64:
-    runs-on: macos-13
-    env:
-      NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM: 1
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: cachix/install-nix-action@v31
-        with:
-          nix_path: nixpkgs=channel:nixos-unstable
-      - name: Configure
-        run: nix-shell --command 'cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF -DBUNDLE_DYLIBS=ON'
-      - name: Build
-        run: nix-shell --command 'ninja -C build'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: vbam-macos-x64
+          name: vbam-macos
           path: build/visualboyadvance-m.app
 
   build-libretro-windows:
@@ -199,8 +179,7 @@ jobs:
     needs:
       - build-windows
       - build-linux
-      - build-macos-arm64
-      - build-macos-x64
+      - build-macos
       - build-libretro-windows
       - build-libretro-linux
       - build-libretro-macos
@@ -227,8 +206,7 @@ jobs:
           }
           package linux-x64           vbam-linux-x64           visualboyadvance-m
           package windows-x64         vbam-windows-x64         visualboyadvance-m.exe
-          package macos-arm64          vbam-macos-arm64         visualboyadvance-m.app
-          package macos-x64            vbam-macos-x64           visualboyadvance-m.app
+          package macos               vbam-macos               visualboyadvance-m.app
           package libretro-linux-x64   vbam-libretro-linux-x64  vbam_libretro.so
           package libretro-windows-x64 vbam-libretro-windows-x64 vbam_libretro.dll
           package libretro-macos       vbam-libretro-macos      vbam_libretro.dylib
