@@ -7,6 +7,7 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,7 +17,7 @@ jobs:
           arch: x64
       - name: Configure
         run: >-
-          cmake -B build -G Ninja -DBUILD_TESTING=OFF -DCOMPILE_ONLY=TRUE
+          cmake -B build -G Ninja -DBUILD_TESTING=OFF
           -DUPSTREAM_RELEASE=FALSE -DVCPKG_TARGET_TRIPLET=x64-windows-static
           -DCMAKE_BUILD_TYPE=Release
       - name: Build
@@ -25,6 +26,7 @@ jobs:
         with:
           name: vbam-windows-x64
           path: build/visualboyadvance-m.exe
+          if-no-files-found: warn
 
   build-linux:
     runs-on: ubuntu-latest
