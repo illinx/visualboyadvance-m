@@ -64,10 +64,12 @@ jobs:
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DENABLE_LTO=OFF -DBUNDLE_DYLIBS=ON
       - name: Build
         run: ninja -C build
+      - name: Stage app bundle
+        run: mkdir stage && mv build/visualboyadvance-m.app stage/
       - uses: actions/upload-artifact@v4
         with:
           name: vbam-macos
-          path: build/visualboyadvance-m.app
+          path: stage/
 
   build-libretro-windows:
     runs-on: windows-latest

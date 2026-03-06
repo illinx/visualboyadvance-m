@@ -32,9 +32,6 @@ main() {
 
     mktmp
 
-    # Detect Homebrew prefix (arm64: /opt/homebrew, Intel: /usr/local)
-    brew_prefix=$(brew --prefix 2>/dev/null) || brew_prefix=/usr/local
-
     app_bundle=$(echo "$1" | fully_resolve_links)
 
     case "$app_bundle" in
@@ -167,16 +164,16 @@ lib_scan() {
 
             [ "$lib" = "$bin" ] && continue
 
-            # check for libs already linked as @rpath/ which usually means $brew_prefix/lib/
+            # check for libs already linked as @rpath/ which usually means /usr/local/lib/
             case "$lib" in
                 '@rpath/'*)
-                    lib="${brew_prefix}/lib${lib#@rpath}"
+                    lib='/usr/local/lib'"${lib#@rpath}"
                     ;;
                 '@loader_path/../../../../'*)
-                    lib="${brew_prefix}/${lib#@loader_path/../../../../}"
+                    lib='/usr/local/'"${lib#@loader_path/../../../../}"
                     ;;
                 '@loader_path/'*)
-                    lib="${brew_prefix}/lib${lib#@loader_path}"
+                    lib='/usr/local/lib'"${lib#@loader_path}"
                     ;;
             esac
 
