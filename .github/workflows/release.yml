@@ -194,6 +194,25 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+      - name: Package artifacts into platform zips
+        working-directory: artifacts
+        run: |
+          package() {
+            local dir="$1"; shift
+            mkdir "$dir"
+            for f in "$@"; do [ -e "$f" ] && mv "$f" "$dir/"; done
+            [ "$(ls -A $dir)" ] && zip -r "${dir}.zip" "$dir"
+            rm -rf "$dir"
+          }
+          package linux-x64          visualboyadvance-m
+          package windows-x64        visualboyadvance-m.exe
+          package macos               visualboyadvance-m.app
+          package libretro-linux-x64  vbam_libretro.so
+          package libretro-windows-x64 vbam_libretro.dll
+          package libretro-macos      vbam_libretro.dylib
+          package libretro-ngc        vbam_libretro_ngc.a
+          package libretro-wii        vbam_libretro_wii.a
+          package libretro-wiiu       vbam_libretro_wiiu.a
       - uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
