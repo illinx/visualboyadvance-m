@@ -47,7 +47,13 @@ jobs:
         with:
           arch: ${{ matrix.msvc_arch }}
 
-      - name: Configure
+      # Full link build for the artifact combination, compile-only for everything else
+      - if: matrix.build_type == 'release' && matrix.build_options == 'default' && matrix.msvc_arch == 'x64'
+        name: Configure (full build)
+        run: >-
+          cmake -B build -G ${{ matrix.cmake_generator }} -DBUILD_TESTING=OFF -DUPSTREAM_RELEASE=FALSE -DVCPKG_TARGET_TRIPLET=${{ matrix.cmake_vcpkg_triplet }} ${{ matrix.cmake_build }} ${{ matrix.cmake_options }}
+      - if: matrix.build_type != 'release' || matrix.build_options != 'default' || matrix.msvc_arch != 'x64'
+        name: Configure (compile only)
         run: >-
           cmake -B build -G ${{ matrix.cmake_generator }} -DBUILD_TESTING=OFF -DCOMPILE_ONLY=TRUE -DUPSTREAM_RELEASE=FALSE -DVCPKG_TARGET_TRIPLET=${{ matrix.cmake_vcpkg_triplet }} ${{ matrix.cmake_build }} ${{ matrix.cmake_options }}
 

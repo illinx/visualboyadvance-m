@@ -66,7 +66,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: vbam-macos
-          path: build/visualboyadvance-m
+          path: build/visualboyadvance-m.app
 
   build-libretro-windows:
     runs-on: windows-latest
