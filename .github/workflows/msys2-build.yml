@@ -34,9 +34,12 @@ jobs:
         shell: msys2 {0}
 
     steps:
+      - name: Configure git line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
       - name: Checkout the code
         uses: actions/checkout@v4
-        with: 
+        with:
           submodules: recursive
       - name: Setup msys2
         uses: msys2/setup-msys2@v2
