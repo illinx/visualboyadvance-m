@@ -69,6 +69,12 @@ endif()
 
 find_package(PkgConfig)
 
+# Add support for Homebrew, MacPorts and Fink on macOS
+option(DISABLE_MACOS_PACKAGE_MANAGERS "Set to TRUE to disable support for macOS Homebrew, MacPorts and Fink." FALSE)
+if(APPLE AND NOT DISABLE_MACOS_PACKAGE_MANAGERS)
+    include(MacPackageManagers)
+endif()
+
 find_package(SDL3 QUIET)
 
 option(ENABLE_SDL3 "Use SDL3" "${SDL3_FOUND}")
@@ -93,8 +99,10 @@ option(ENABLE_BZ2 "Enable BZ2 archive support" ON)
 option(ENABLE_LZMA "Enable LZMA archive support" ON)
 
 if(ENABLE_SDL3)
-   set(CMAKE_C_FLAGS "-DENABLE_SDL3 ${CMAKE_C_FLAGS}")
-   set(CMAKE_CXX_FLAGS "-DENABLE_SDL3 ${CMAKE_CXX_FLAGS}")
+   set(CMAKE_C_FLAGS      "-DENABLE_SDL3 ${CMAKE_C_FLAGS}")
+   set(CMAKE_CXX_FLAGS    "-DENABLE_SDL3 ${CMAKE_CXX_FLAGS}")
+   set(CMAKE_OBJC_FLAGS   "-DENABLE_SDL3 ${CMAKE_OBJC_FLAGS}")
+   set(CMAKE_OBJCXX_FLAGS "-DENABLE_SDL3 ${CMAKE_OBJCXX_FLAGS}")
 
    include(CheckSourceCompiles)
    check_source_compiles(CXX
@@ -104,14 +112,11 @@ int main() { return SDL_SCALEMODE_PIXELART; }
 "       HAVE_SDL_SCALEMODE_PIXELART)
 
    if(HAVE_SDL_SCALEMODE_PIXELART)
-      set(CMAKE_C_FLAGS "-DHAVE_SDL3_PIXELART ${CMAKE_C_FLAGS}")
-      set(CMAKE_CXX_FLAGS "-DHAVE_SDL3_PIXELART ${CMAKE_CXX_FLAGS}")
+      set(CMAKE_C_FLAGS      "-DHAVE_SDL3_PIXELART ${CMAKE_C_FLAGS}")
+      set(CMAKE_CXX_FLAGS    "-DHAVE_SDL3_PIXELART ${CMAKE_CXX_FLAGS}")
+      set(CMAKE_OBJC_FLAGS   "-DHAVE_SDL3_PIXELART ${CMAKE_OBJC_FLAGS}")
+      set(CMAKE_OBJCXX_FLAGS "-DHAVE_SDL3_PIXELART ${CMAKE_OBJCXX_FLAGS}")
    endif()
-endif()
-
-if(DISABLE_OPENGL)
-   set(CMAKE_C_FLAGS "-DNO_OPENGL -DNO_OGL ${CMAKE_C_FLAGS}")
-   set(CMAKE_CXX_FLAGS "-DNO_OPENGL -DNO_OGL ${CMAKE_CXX_FLAGS}")
 endif()
 
 set(enable_asm_default OFF)
@@ -134,12 +139,6 @@ include(CMakeDependentOption)
 cmake_dependent_option(ENABLE_MMX "Enable MMX" ${MMX_DEFAULT} "ENABLE_ASM_SCALERS" OFF)
 
 option(ENABLE_LIRC "Enable LIRC support" OFF)
-
-# Add support for Homebrew, MacPorts and Fink on macOS
-option(DISABLE_MACOS_PACKAGE_MANAGERS "Set to TRUE to disable support for macOS Homebrew, MacPorts and Fink." FALSE)
-if(APPLE AND NOT DISABLE_MACOS_PACKAGE_MANAGERS)
-    include(MacPackageManagers)
-endif()
 
 # Link / SFML
 if(NOT TRANSLATIONS_ONLY)
@@ -195,6 +194,16 @@ option(ENABLE_LTO "Compile with Link Time Optimization" ${LTO_DEFAULT})
 option(ENABLE_GBA_LOGGING "Enable extended GBA logging" ON)
 
 option(UPSTREAM_RELEASE "do some optimizations and release automation tasks" OFF)
+
+if(APPLE)
+    set(bundle_dylibs_default OFF)
+
+    if(UPSTREAM_RELEASE)
+        set(bundle_dylibs_default ON)
+    endif()
+
+    option(BUNDLE_DYLIBS "Bundle dylibs into .app" ${bundle_dylibs_default})
+endif()
 
 if(WIN32)
     option(ENABLE_DIRECT3D "Enable Direct3D rendering for the wxWidgets port" ON)

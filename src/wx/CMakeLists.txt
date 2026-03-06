@@ -394,6 +394,15 @@ function(configure_wx_target target)
 
 endfunction()
 
+# Handle errors from system headers on macOS.
+if(APPLE)
+    add_compile_options(
+        $<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-Wno-missing-method-return-type>
+        $<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-Wno-availability>
+        $<$<COMPILE_LANGUAGE:OBJC,OBJCXX>:-Wno-unguarded-availability-new>
+    )
+endif()
+
 # Sub-projects.
 add_subdirectory(test)
 add_subdirectory(config)
@@ -437,8 +446,8 @@ if(APPLE AND NOT COMPILE_ONLY)
 endif()
 
 if(APPLE)
-# Needed for CoreAudio.
-    target_compile_options(visualboyadvance-m PRIVATE -Wno-error=elaborated-enum-base)
+    set_source_files_properties(audio/internal/coreaudio.cpp PROPERTIES
+        COMPILE_OPTIONS "-Wno-elaborated-enum-base;-Wno-availability")
 endif()
 
 target_sources(visualboyadvance-m PRIVATE ${VBAM_WX_COMMON} ${VBAM_ICON_PATH})
@@ -447,6 +456,11 @@ if(ENABLE_SDL3)
     target_include_directories(visualboyadvance-m PRIVATE ${SDL3_INCLUDE_DIRS})
 else()
     target_include_directories(visualboyadvance-m PRIVATE ${SDL2_INCLUDE_DIRS})
+endif()
+
+# Setting an SDL audio device by name segfaults on FreeBSD.
+if(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
+    target_compile_definitions(visualboyadvance-m PRIVATE ONLY_DEFAULT_AUDIO_DEVICE)
 endif()
 
 if(ENABLE_OPENAL)
@@ -716,6 +730,31 @@ host_compile(${CMAKE_CURRENT_SOURCE_DIR}/bin2c.c ${BIN2C})
 # Override wxrc when cross-compiling.
 if(CMAKE_HOST_WIN32 AND CMAKE_CROSSCOMPILING)
     set(WXRC ${CMAKE_SOURCE_DIR}/win32-deps/wxrc/wxrc.exe)
+endif()
+
+if(APPLE AND CMAKE_CROSSCOMPILING)
+    find_program(HOMEBREW_EXECUTABLE brew)
+
+    if(HOMEBREW_EXECUTABLE)
+        if(NOT "$ENV{HOMEBREW_PREFIX}" STREQUAL "")
+            set(MAC_HOMEBREW_PREFIX $ENV{HOMEBREW_PREFIX})
+        else()
+            execute_process(COMMAND ${HOMEBREW_EXECUTABLE} --prefix
+                            OUTPUT_VARIABLE MAC_HOMEBREW_PREFIX
+                            OUTPUT_STRIP_TRAILING_WHITESPACE)
+        endif()
+
+        file(GLOB MAC_HOMEBREW_WXWIDGETS_DIR "${MAC_HOMEBREW_PREFIX}/Cellar/wxwidgets/*")
+        if(MAC_HOMEBREW_WXWIDGETS_DIR)
+            list(SORT MAC_HOMEBREW_WXWIDGETS_DIR)
+            list(REVERSE MAC_HOMEBREW_WXWIDGETS_DIR)
+            list(GET MAC_HOMEBREW_WXWIDGETS_DIR 0 MAC_HOMEBREW_WXWIDGETS_PREFIX)
+        endif()
+
+        if(EXISTS "${MAC_HOMEBREW_WXWIDGETS_PREFIX}/bin/wxrc")
+            set(WXRC "${MAC_HOMEBREW_WXWIDGETS_PREFIX}/bin/wxrc")
+        endif()
+    endif()
 endif()
 
 # Configure wxrc.
@@ -1114,18 +1153,14 @@ if(UPSTREAM_RELEASE AND WIN32)
     endif()
 endif()
 
+# Bundle dylibs and relink them for releasing .app, but only in Release mode, also install translations into the .app.
 if(APPLE)
-    # this should set ROM file types correctly
+    # This should set ROM file types correctly.
     set(MACOSX_BUNDLE_ICON_FILE ${VBAM_ICON})
     set_property(TARGET visualboyadvance-m APPEND PROPERTY MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/wxplist.in)
     set_source_files_properties(${VBAM_ICON_PATH} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 
-    # bundle dylibs and relink them for releasing .app
-    # also install translations into the .app
-    # but only in Release mode
-    option(BUNDLE_DYLIBS "Bundle dylibs into .app" OFF)
-
-    if(GUNDLE_DYLIBS AND CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
+    if(BUNDLE_DYLIBS AND CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
         add_custom_command(
             TARGET visualboyadvance-m POST_BUILD
             COMMAND bash ${CMAKE_SOURCE_DIR}/tools/macOS/third_party_libs_tool ./visualboyadvance-m.app
@@ -1154,10 +1189,6 @@ if(APPLE)
 endif()
 
 if(APPLE AND UPSTREAM_RELEASE)
-#    if(WX_MAC_PATCHED)
-#        target_compile_definitions(visualboyadvance-m PRIVATE VBAM_WX_MAC_PATCHED_FOR_ALERT_SOUND)
-#    endif()
-
     if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
         find_program(STRIP_PROGRAM strip)
 
@@ -1171,26 +1202,28 @@ if(APPLE AND UPSTREAM_RELEASE)
         endif()
     endif()
 
+    # Sign bundled dylibs individually before signing the app bundle.
+    # codesign --deep does not sign loose .dylib files, only .framework bundles,
+    # so dylibs in Contents/Frameworks must be signed explicitly at build time.
+    # This must run before signing the app bundle itself.
+    if(BUNDLE_DYLIBS AND CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
+        add_custom_command(
+            TARGET visualboyadvance-m
+            POST_BUILD
+            VERBATIM COMMAND sh -c [=[
+                find ./visualboyadvance-m.app/Contents/Frameworks -name "*.dylib" \
+                    -exec codesign --sign "Developer ID Application" --options runtime --timestamp --force '{}' ';' || :
+            ]=]
+            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        )
+    endif()
+
     add_custom_command(
         TARGET visualboyadvance-m
         POST_BUILD
         VERBATIM COMMAND sh -c [=[codesign --sign "Developer ID Application" --options runtime --timestamp --force --deep ./visualboyadvance-m.app || :]=]
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     )
-
-    if(EXISTS ${CMAKE_BINARY_DIR}/visualboyadvance-m.app/Contents/Frameworks)
-        # Sign frameworks individually, like Xcode.
-        file(GLOB frameworks ${CMAKE_BINARY_DIR}/visualboyadvance-m.app/Contents/Frameworks/*)
-        foreach(framework ${frameworks})
-            message(STATUS "Signing framework: " ${framework})
-            add_custom_command(
-                TARGET visualboyadvance-m
-                POST_BUILD
-                VERBATIM COMMAND sh -c "codesign --sign 'Developer ID Application' --options runtime --timestamp --force --deep ${framework} || :"
-                WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-            )
-        endforeach()
-    endif()
 
     # Zip, notarize, staple to the .app and zip again
 

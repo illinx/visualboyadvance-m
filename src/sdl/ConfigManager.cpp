@@ -30,6 +30,10 @@
     #define S_ISDIR(mode)  (((mode) & _S_IFMT) == _S_IFDIR)
 #endif
 
+#else
+
+#include <unistd.h>
+
 #endif // _WIN32
 
 #ifndef __GNUC__
@@ -479,7 +483,7 @@ const char* FindConfigFile(const char *name)
 	char *home = getenv("USERPROFILE");
 #endif
 	if (home != NULL) {
-		snprintf(path, "%s%c%s", home, kFileSep, name);
+		snprintf(path, sizeof(path), "%s%c%s", home, kFileSep, name);
 		if (FileExists(path))
 		{
 			return path;

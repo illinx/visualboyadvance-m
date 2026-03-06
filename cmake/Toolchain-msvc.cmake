@@ -1,5 +1,6 @@
-# Set the runtime library properly.
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:DEBUG>:Debug>" CACHE INTERNAL "")
+# Link the C++ and VS runtimes statically (/MT for release, /MTd for debug).
+# FORCE overrides the vcpkg toolchain, which sets this based on VCPKG_CRT_LINKAGE.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:DEBUG>:Debug>" CACHE STRING "" FORCE)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     # MSVC-specific flags (not supported by clang-cl).
@@ -47,7 +48,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
         set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "ProgramDatabase" CACHE STRING "" FORCE)
     endif()
 else()
-    add_compile_options(/MT /Oi /Gy)
+    add_compile_options(/Oi /Gy)
     add_link_options(/OPT:REF /OPT:ICF)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "ProgramDatabase" CACHE STRING "" FORCE)
 
@@ -74,6 +75,18 @@ if(CMAKE_VERSION VERSION_LESS "3.25")
 endif()
 
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/std:c++17>)
+
+# UPSTREAM_RELEASE optimizations: Core2 architecture with SSE3
+if(UPSTREAM_RELEASE)
+    if(X86_64)
+        # For 64-bit: tune for Intel processors (Core2 baseline)
+        # Note: SSE2 is already baseline for x64, compiler may use SSE3/SSSE3 opportunistically
+        add_compile_options(/favor:INTEL64)
+    elseif(X86_32)
+        # For 32-bit: use baseline x86 with MMX only (no SSE)
+        # Note: MMX is part of baseline x86 in MSVC, no /arch flag needed
+    endif()
+endif()
 
 set(CMAKE_RC_FLAGS "-c65001 /DWIN32" CACHE STRING "" FORCE)
 

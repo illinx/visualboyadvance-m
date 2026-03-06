@@ -98,8 +98,8 @@ double GetFilterScale() {
         case config::Filter::kSimple4x:
         case config::Filter::kHQ4x:
             return 4.0;
-        case config::Filter::kXbrz5x:
-            return 5.0;
+        case config::Filter::kXbrz6x:
+            return 6.0;
         case config::Filter::kXbrz9x:
         case config::Filter::kScaleFX9x:
             return 9.0;
@@ -129,7 +129,7 @@ constexpr int kFilterContextRadius = 2;
 constexpr int kSeamMarginRows = 1;
 
 // Total source rows to process for each seam band (above + below seam)
-constexpr int kSeamBandSourceRows = (kFilterContextRadius + kSeamMarginRows) * 2;
+[[maybe_unused]] constexpr int kSeamBandSourceRows = (kFilterContextRadius + kSeamMarginRows) * 2;
 
 // Apply the currently selected 32-bit filter to the image region.
 // This is the core filter dispatch function used by both threaded rendering
@@ -170,8 +170,8 @@ void ApplyFilter32(uint8_t* src, int instride, uint8_t* delta, uint8_t* dst,
         case config::Filter::kXbrz2x:
             xbrz2x32(src, instride, delta, dst, outstride, width, height);
             break;
-        case config::Filter::kXbrz5x:
-            xbrz5x32(src, instride, delta, dst, outstride, width, height);
+        case config::Filter::kXbrz6x:
+            xbrz6x32(src, instride, delta, dst, outstride, width, height);
             break;
         case config::Filter::kXbrz9x:
             xbrz9x32(src, instride, delta, dst, outstride, width, height);
@@ -2198,9 +2198,9 @@ public:
     enum class Phase { IFB, Filter, SeamFix };
 
     FilterThread() : wxThread(wxTHREAD_JOINABLE), lock_(), sig_(lock_),
-                     src2_(nullptr), dst2_(nullptr), src2_size_(0), dst2_size_(0),
                      phase_(Phase::IFB), seamBandStart_(-1), seamBandEnd_(-1),
-                     seamSrc_(nullptr), seamDst_(nullptr) {}
+                     seamSrc_(nullptr), seamDst_(nullptr),
+                     src2_(nullptr), dst2_(nullptr), src2_size_(0), dst2_size_(0) {}
 
     ~FilterThread() {
         // Free pre-allocated conversion buffers
@@ -4072,6 +4072,20 @@ void GLDrawingPanel::RefreshGL()
     glBindTexture(GL_TEXTURE_2D, texid);
 }
         
+void GLDrawingPanel::PaintEv(wxPaintEvent& ev)
+{
+    (void)ev;
+    // Never use wx DC drawing on the NSOpenGLView during paint events.
+    // On macOS, any wx DC drawing call (DrawRectangle etc.) on an NSOpenGLView
+    // triggers EnsureIsValid() -> wxOSXLockFocus() -> lockFocusIfCanDraw()
+    // -> [NSView setNeedsDisplay:YES], causing an infinite repaint loop.
+    // DrawArea already handles the !todraw case with glClear, so always
+    // go through OpenGL here instead of the base class draw_black_background path.
+    // The wxPaintDC is created to acknowledge the paint event but never drawn with.
+    wxPaintDC dc(GetWindow());
+    DrawArea(dc);
+}
+
 void GLDrawingPanel::DrawArea(wxWindowDC& dc)
 {
     (void)dc; // unused params
@@ -4367,7 +4381,10 @@ void DXDrawingPanel::DrawArea(wxWindowDC& dc)
     if (!todraw) {
         // Clear screen if no data to draw
         device->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 0), 1.0f, 0);
-        device->Present(NULL, NULL, NULL, NULL);
+        if (using_d3d9ex)
+            ((IDirect3DDevice9Ex*)device)->PresentEx(NULL, NULL, NULL, NULL, 0);
+        else
+            device->Present(NULL, NULL, NULL, NULL);
         return;
     }
 
@@ -4593,7 +4610,10 @@ void DXDrawingPanel::DrawArea(wxWindowDC& dc)
     device->EndScene();
 
     // Present the frame
-    device->Present(NULL, NULL, NULL, NULL);
+    if (using_d3d9ex)
+        ((IDirect3DDevice9Ex*)device)->PresentEx(NULL, NULL, NULL, NULL, 0);
+    else
+        device->Present(NULL, NULL, NULL, NULL);
 }
 #endif
         
