@@ -1,5 +1,5 @@
 name: Libretro Devkitpro
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   build:
@@ -32,3 +32,9 @@ jobs:
       # Libretro build
       - name: Build libretro core
         run: make -C src/libretro ${{ matrix.libretro_build }} platform=${{ matrix.target_name }}
+      - if: matrix.build_type == 'release'
+        name: Upload libretro artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vbam-libretro-${{ matrix.target_name }}
+          path: src/libretro/vbam_libretro_${{ matrix.target_name }}.a
