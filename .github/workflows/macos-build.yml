@@ -1,5 +1,5 @@
 name: macOS Latest
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   build:
@@ -55,10 +55,22 @@ jobs:
         name: Build libretro core
         run: >-
           nix-shell --command 'make -C src/libretro ${{ matrix.libretro_build }}'
+      - if: matrix.build_options == 'libretro' && matrix.build_type == 'release'
+        name: Upload libretro artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vbam-libretro-macos
+          path: src/libretro/vbam_libretro.dylib
 
       # Run tests
       - if: matrix.build_options == 'default'
         name: Run tests
         run: >-
           nix-shell --command 'cd build && ctest -j --output-on-failure'
+      - if: matrix.build_options == 'default' && matrix.build_type == 'release'
+        name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vbam-macos
+          path: build/visualboyadvance-m
 
