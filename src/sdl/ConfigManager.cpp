@@ -361,7 +361,7 @@ void LoadConfig()
 	coreOptions.speedup_mute = ReadPref("speedupMute", 1);
 	coreOptions.useBios = ReadPrefHex("useBiosGBA");
 	coreOptions.gbPrinterEnabled = ReadPref("gbPrinter", 0);
-	coreOptions.gba2Enabled = ReadPref("gba2Enabled", 0);
+	coreOptions.gba2Enabled = ReadPref("gba2Enabled", 1);
 
 	int soundQuality = (ReadPrefHex("soundQuality", 1));
 	switch (soundQuality) {
