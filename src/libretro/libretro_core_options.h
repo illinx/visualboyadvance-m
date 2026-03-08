@@ -429,7 +429,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
     },
     {
         "vbam_gba2enabled",
-        "Enable 2P Support",
+        "Enable 2nd Controller",
         NULL,
         "Enable local 2nd controller using GBA2 spec.",
         NULL,
