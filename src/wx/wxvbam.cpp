@@ -23,7 +23,6 @@
 #include <wx/fs_mem.h>
 #include <wx/menu.h>
 #include <wx/mstream.h>
-#include <wx/progdlg.h>
 #include <wx/protocol/http.h>
 #include <wx/regex.h>
 #include <wx/spinctrl.h>
@@ -1530,8 +1529,11 @@ void MainFrame::SetMenusOpened(bool state) {
 // uses dialog_opened as a nesting counter
 int MainFrame::ShowModal(wxDialog* dlg)
 {
+    if (!dlg) {
+        wxLogError(_("Failed to load dialog"));
+        return wxID_CANCEL;
+    }
     dlg->SetWindowStyle(dlg->GetWindowStyle() | wxCAPTION | wxRESIZE_BORDER);
-    CheckPointer(dlg);
     StartModal();
     int ret = dlg->ShowModal();
     StopModal();

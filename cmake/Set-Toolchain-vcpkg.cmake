@@ -226,27 +226,12 @@ if(WIN32 AND VCPKG_TARGET_TRIPLET MATCHES "^x64-mingw")
     endif()
 endif()
 
-function(vcpkg_seconds)
-    if(CMAKE_HOST_SYSTEM MATCHES Windows OR ((NOT DEFINED CMAKE_HOST_SYSTEM) AND WIN32))
-        execute_process(
-            COMMAND cmd /c echo %TIME:~0,8%
-            OUTPUT_VARIABLE time
-        )
-    else()
-        execute_process(
-            COMMAND date +%H:%M:%S
-            OUTPUT_VARIABLE time
-        )
-    endif()
-
-    string(SUBSTRING "${time}" 0 2 hours)
-    string(SUBSTRING "${time}" 3 2 minutes)
-    string(SUBSTRING "${time}" 6 2 secs)
-
-    math(EXPR seconds "(${hours} * 60 * 60) + (${minutes} * 60) + ${secs}")
-
-    set(seconds ${seconds} PARENT_SCOPE)
-endfunction()
+# Detect MSVC toolkit version for binary package URL path.
+# v143 = VS 2022 (VCToolsVersion env var starts with 14.3).
+set(VBAM_VCPKG_TOOLKIT_SUBDIR "")
+if("$ENV{VCToolsVersion}" MATCHES "^14\\.[34]")
+    set(VBAM_VCPKG_TOOLKIT_SUBDIR "v143/")
+endif()
 
 function(vcpkg_check_git_status git_status)
     # The VS vcpkg component cannot be written to without elevation.
@@ -255,59 +240,9 @@ function(vcpkg_check_git_status git_status)
     endif()
 endfunction()
 
-function(vcpkg_get_first_upgrade vcpkg_exe)
-    # First get the list of upgraded ports.
-    execute_process(
-        COMMAND ${vcpkg_exe} upgrade
-        OUTPUT_VARIABLE upgradable
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-        WORKING_DIRECTORY ${VCPKG_ROOT}
-    )
 
-    string(REGEX REPLACE "\r?\n" ";" upgrade_lines "${upgradable}")
 
-    unset(first_upgrade)
-
-    foreach(line ${upgrade_lines})
-        if(line MATCHES "^  [* ] [^ ]*:")
-            string(REGEX REPLACE "^  [* ] ([^[]+).*" "\\1" pkg     ${line})
-            string(REGEX REPLACE "^[^:]+:(.+)$"      "\\1" triplet ${line})
-
-            if(triplet STREQUAL "${VCPKG_TARGET_TRIPLET}")
-                # Prefer upgrading zlib before anything else.
-                if(NOT first_upgrade OR pkg MATCHES zlib)
-                    set(first_upgrade ${pkg})
-                endif()
-            endif()
-        endif()
-    endforeach()
-
-    if(DEFINED first_upgrade)
-        set(first_upgrade ${first_upgrade} PARENT_SCOPE)
-    endif()
-endfunction()
-
-function(vcpkg_deps_fixup vcpkg_exe)
-    # Get installed list.
-    execute_process(
-        COMMAND ${vcpkg_exe} list
-        OUTPUT_VARIABLE pkg_list
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-        WORKING_DIRECTORY ${VCPKG_ROOT}
-    )
-
-    # If libvorbis is NOT installed but libogg is, remove libvorbis recursively.
-    if(pkg_list MATCHES libogg AND (NOT pkg_list MATCHES libvorbis))
-        execute_process(
-            COMMAND ${vcpkg_exe} remove --recurse libogg:${VCPKG_TARGET_TRIPLET}
-            WORKING_DIRECTORY ${VCPKG_ROOT}
-        )
-    endif()
-endfunction()
-
-function(vcpkg_is_installed vcpkg_exe pkg_name pkg_ver pkg_triplet powershell outvar)
+function(vcpkg_is_installed pkg_name pkg_ver pkg_triplet powershell outvar)
     set(${outvar} FALSE PARENT_SCOPE)
 
     unset(CMAKE_MATCH_1)
@@ -388,8 +323,13 @@ function(get_triplet_package_list triplet)
         return()
     endif()
 
+    set(pkg_dir "${triplet}")
+    if(triplet STREQUAL VCPKG_TARGET_TRIPLET)
+        set(pkg_dir "${triplet}/${VBAM_VCPKG_TOOLKIT_SUBDIR}")
+    endif()
+
     file(
-        DOWNLOAD "https://nightly.visualboyadvance-m.org/vcpkg/${triplet}/" "${CMAKE_BINARY_DIR}/binary_package_list_${triplet}.html"
+        DOWNLOAD "https://nightly.visualboyadvance-m.org/vcpkg/${pkg_dir}" "${CMAKE_BINARY_DIR}/binary_package_list_${triplet}.html"
         STATUS pkg_list_status
     )
     list(GET pkg_list_status 1 pkg_list_error)
@@ -397,6 +337,7 @@ function(get_triplet_package_list triplet)
 
     if(NOT pkg_list_status EQUAL 0)
         message(STATUS "Failed to download vcpkg binary package list: ${pkg_list_status} - ${pkg_list_error}")
+        file(REMOVE "${CMAKE_BINARY_DIR}/binary_package_list_${triplet}.html")
         return()
     endif()
 endfunction()
@@ -404,10 +345,15 @@ endfunction()
 function(download_package pkg pkgs_dir)
     string(REGEX REPLACE "^[^_]+_[^_]+_([^.]+)[.]zip\$" "\\1" pkg_triplet ${pkg})
 
-    message(STATUS "Downloading https://nightly.visualboyadvance-m.org/vcpkg/${pkg_triplet}/${pkg} ...")
+    set(pkg_dir "${pkg_triplet}")
+    if(pkg_triplet STREQUAL VCPKG_TARGET_TRIPLET)
+        set(pkg_dir "${pkg_triplet}/${VBAM_VCPKG_TOOLKIT_SUBDIR}")
+    endif()
+
+    message(STATUS "Downloading https://nightly.visualboyadvance-m.org/vcpkg/${pkg_dir}/${pkg} ...")
 
     file(
-        DOWNLOAD "https://nightly.visualboyadvance-m.org/vcpkg/${pkg_triplet}/${pkg}" "${pkgs_dir}/${pkg}"
+        DOWNLOAD "https://nightly.visualboyadvance-m.org/vcpkg/${pkg_dir}/${pkg}" "${pkgs_dir}/${pkg}"
         STATUS pkg_download_status
     )
     list(GET pkg_download_status 1 pkg_download_error)
@@ -421,7 +367,7 @@ function(download_package pkg pkgs_dir)
     message(STATUS "done.")
 endfunction()
 
-function(zip_is_installed vcpkg_exe zip outvar)
+function(zip_is_installed zip outvar)
     if(NOT zip MATCHES "([^_]+)_([^_]+)_([^.]+)[.]zip")
         return()
     endif()
@@ -429,7 +375,7 @@ function(zip_is_installed vcpkg_exe zip outvar)
     set(pkg_version ${CMAKE_MATCH_2})
     set(pkg_triplet ${CMAKE_MATCH_3})
 
-    vcpkg_is_installed(${vcpkg_exe} ${pkg_name} ${pkg_version} ${pkg_triplet} ${POWERSHELL} pkg_installed)
+    vcpkg_is_installed(${pkg_name} ${pkg_version} ${pkg_triplet} ${POWERSHELL} pkg_installed)
 
     set(${outvar} ${pkg_installed} PARENT_SCOPE)
 endfunction()
@@ -441,23 +387,85 @@ function(cleanup_binary_packages)
     unset(VCPKG_INSTALLED_COUNT CACHE)
 endfunction()
 
-function(get_binary_packages vcpkg_exe)
+function(get_binary_packages)
     set(binary_packages_installed FALSE PARENT_SCOPE)
 
+    # Build the list of wanted port names from VCPKG_DEPS and VCPKG_DEPS_OPTIONAL.
+    set(wanted_ports "")
+
+    # Add core dependencies (strip [features] to get bare port names).
+    foreach(dep ${VCPKG_DEPS})
+        string(REGEX REPLACE "\\[.*\\]" "" port_name "${dep}")
+        list(APPEND wanted_ports "${port_name}")
+    endforeach()
+
+    # Add optional dependencies unless explicitly turned off.
+    list(LENGTH VCPKG_DEPS_OPTIONAL optionals_list_len)
+    if(optionals_list_len GREATER 0)
+        math(EXPR optionals_list_last "${optionals_list_len} - 1")
+
+        foreach(i RANGE 0 ${optionals_list_last} 2)
+            list(GET VCPKG_DEPS_OPTIONAL ${i} dep)
+            math(EXPR var_idx "${i} + 1")
+            list(GET VCPKG_DEPS_OPTIONAL ${var_idx} var)
+
+            if(NOT DEFINED ${var} OR ${var})
+                string(REGEX REPLACE "\\[.*\\]" "" port_name "${dep}")
+                list(APPEND wanted_ports "${port_name}")
+            endif()
+        endforeach()
+    endif()
+
+    if(NOT wanted_ports)
+        message(STATUS "No packages to install.")
+        return()
+    endif()
+
+    # Download the package listing for the target triplet.
     get_triplet_package_list(${VCPKG_TARGET_TRIPLET})
 
     if(NOT EXISTS "${CMAKE_BINARY_DIR}/binary_package_list_${VCPKG_TARGET_TRIPLET}.html")
-        message(STATUS "Failed to download binary package list found for triplet '${VCPKG_TARGET_TRIPLET}', aborting.")
+        message(STATUS "Failed to download binary package list for triplet '${VCPKG_TARGET_TRIPLET}'.")
         return()
     endif()
 
     file(READ "${CMAKE_BINARY_DIR}/binary_package_list_${VCPKG_TARGET_TRIPLET}.html" raw_html)
-    string(REGEX MATCHALL "<a href=\"[^\"]+[.]zip\"" links ${raw_html})
+    string(REGEX MATCHALL "<a href=\"[^\"]+[.]zip\"" links "${raw_html}")
+    set(all_packages "")
     foreach(link ${links})
-        string(REGEX REPLACE "<a href=\"([^\"]+[.]zip)\"" "\\1" pkg ${link})
-        list(APPEND binary_packages ${pkg})
+        string(REGEX REPLACE "<a href=\"([^\"]+[.]zip)\"" "\\1" pkg "${link}")
+        list(APPEND all_packages ${pkg})
     endforeach()
 
+    if(NOT all_packages)
+        message(STATUS "No binary packages available for triplet '${VCPKG_TARGET_TRIPLET}'.")
+        return()
+    endif()
+
+    # Match wanted ports against available binary packages.
+    # Skip ports with no binary package instead of aborting.
+    set(binary_packages "")
+    set(all_ports_found TRUE)
+    foreach(port ${wanted_ports})
+        set(found FALSE)
+        foreach(pkg ${all_packages})
+            if(pkg MATCHES "^${port}_")
+                list(APPEND binary_packages "${pkg}")
+                set(found TRUE)
+                break()
+            endif()
+        endforeach()
+        if(NOT found)
+            message(STATUS "No binary package found for port '${port}', will build from source.")
+            set(all_ports_found FALSE)
+        endif()
+    endforeach()
+
+    if(NOT binary_packages)
+        return()
+    endif()
+
+    # Fetch vcpkg-binpkg tool.
     set(vcpkg_binpkg_dir ${CMAKE_BINARY_DIR}/vcpkg-binpkg)
     include(FetchContent)
     FetchContent_Declare(
@@ -465,15 +473,14 @@ function(get_binary_packages vcpkg_exe)
         URL "https://github.com/rkitover/vcpkg-binpkg-prototype/archive/refs/heads/master.zip"
         SOURCE_DIR ${vcpkg_binpkg_dir}
     )
-
     FetchContent_GetProperties(vcpkg_binpkg)
     if(NOT vcpkg_binpkg_POPULATED)
         FetchContent_MakeAvailable(vcpkg_binpkg)
     endif()
 
+    # Filter out already-installed packages.
     foreach(pkg ${binary_packages})
-        zip_is_installed(${vcpkg_exe} ${pkg} pkg_installed)
-
+        zip_is_installed(${pkg} pkg_installed)
         if(NOT pkg_installed)
             list(APPEND to_install ${pkg})
         endif()
@@ -485,81 +492,115 @@ function(get_binary_packages vcpkg_exe)
 
         foreach(pkg ${to_install})
             download_package("${pkg}" "${bin_pkgs_dir}")
-
             if(NOT EXISTS "${bin_pkgs_dir}/${pkg}")
-                message(STATUS "Failed to download package '${pkg}', aborting.")
-                return()
+                message(STATUS "Failed to download package '${pkg}', will build from source.")
+                set(all_ports_found FALSE)
             endif()
         endforeach()
 
-        unset(installed_host_deps)
-
+        # Install any missing dependencies not in the wanted list.
+        # Use progress_made to terminate: if no new deps are downloaded
+        # in an iteration, stop (remaining gaps handled by source install).
         while(TRUE)
-#                       -command "import-module ($env:USERPROFILE + '/source/repos/vcpkg-binpkg-prototype/vcpkg-binpkg.psm1'); vcpkg-listmissing ."
             execute_process(
                 COMMAND ${POWERSHELL}
                     -executionpolicy bypass -noprofile
                     -command "import-module '${CMAKE_BINARY_DIR}/vcpkg-binpkg/vcpkg-binpkg.psm1'; vcpkg-listmissing ."
                 WORKING_DIRECTORY ${bin_pkgs_dir}
-                OUTPUT_VARIABLE host_deps
-                RESULT_VARIABLE host_deps_status
+                OUTPUT_VARIABLE missing_deps
+                RESULT_VARIABLE missing_deps_status
             )
 
-            if(NOT host_deps_status EQUAL 0)
-                message(STATUS "Failed to calculate host dependencies: ${host_deps_status}")
-                return()
-            endif()
-
-            string(REGEX REPLACE "\r?\n"   ";" host_deps "${host_deps}")
-            string(REGEX REPLACE " *;+ *$" ""  host_deps "${host_deps}")
-
-            list(LENGTH host_deps           host_deps_count)
-            list(LENGTH installed_host_deps installed_host_deps_count)
-
-            if(host_deps_count EQUAL installed_host_deps_count)
+            if(NOT missing_deps_status EQUAL 0)
+                message(STATUS "Failed to determine missing dependencies, will build remaining from source.")
+                set(all_ports_found FALSE)
                 break()
             endif()
 
-            foreach(host_dep ${host_deps})
-                if(NOT host_dep MATCHES "^([^:]+):([^:]+)\$")
+            string(REGEX REPLACE "\r?\n"   ";" missing_deps "${missing_deps}")
+            string(REGEX REPLACE " *;+ *$" ""  missing_deps "${missing_deps}")
+            list(FILTER missing_deps EXCLUDE REGEX "^$")
+
+            if(NOT missing_deps)
+                break()
+            endif()
+
+            set(progress_made FALSE)
+
+            foreach(dep ${missing_deps})
+                if(NOT dep MATCHES "^([^:]+):([^:]+)\$")
                     continue()
                 endif()
-                set(host_dep_name    ${CMAKE_MATCH_1})
-                set(host_dep_triplet ${CMAKE_MATCH_2})
+                set(dep_name    ${CMAKE_MATCH_1})
+                set(dep_triplet ${CMAKE_MATCH_2})
 
-                get_triplet_package_list(${host_dep_triplet})
+                set(pkg_installed FALSE)
+                vcpkg_is_installed(${dep_name} 0 ${dep_triplet} ${POWERSHELL} pkg_installed)
 
-                file(READ "${CMAKE_BINARY_DIR}/binary_package_list_${host_dep_triplet}.html" raw_html)
-                string(REGEX MATCHALL "<a href=\"${host_dep_name}_[^\"]+[.]zip\"" links ${raw_html})
+                if(pkg_installed)
+                    continue()
+                endif()
+
+                get_triplet_package_list(${dep_triplet})
+
+                if(NOT EXISTS "${CMAKE_BINARY_DIR}/binary_package_list_${dep_triplet}.html")
+                    message(STATUS "No package list for triplet '${dep_triplet}', cannot resolve missing dependency '${dep_name}'.")
+                    set(all_ports_found FALSE)
+                    continue()
+                endif()
+
+                file(READ "${CMAKE_BINARY_DIR}/binary_package_list_${dep_triplet}.html" raw_html)
+                string(REGEX MATCHALL "<a href=\"${dep_name}_[^\"]+[.]zip\"" links "${raw_html}")
 
                 list(LENGTH links links_count)
 
                 if(NOT links_count EQUAL 1)
-                    message(STATUS "Multiple host dependencies found for '${host_dep_name}' for triplet '${host_dep_triplet}', aborting.")
-                    return()
+                    if(links_count GREATER 1)
+                        message(STATUS "Multiple packages found for missing dependency '${dep_name}' for triplet '${dep_triplet}', skipping.")
+                    else()
+                        message(STATUS "No package found for missing dependency '${dep_name}' for triplet '${dep_triplet}', will build from source.")
+                    endif()
+                    set(all_ports_found FALSE)
+                    continue()
                 endif()
 
                 string(REGEX REPLACE "<a href=\"([^\"]+[.]zip)\"" "\\1" pkg ${links})
 
-                list(FIND installed_host_deps "${pkg}" found_idx)
+                # Skip if already downloaded.
+                if(EXISTS "${bin_pkgs_dir}/${pkg}")
+                    continue()
+                endif()
 
-                if(found_idx EQUAL -1)
-                    zip_is_installed(${vcpkg_exe} ${pkg} pkg_installed)
+                download_package("${pkg}" "${bin_pkgs_dir}")
 
-                    if(NOT pkg_installed)
-                        download_package("${pkg}" "${bin_pkgs_dir}")
-
-                        if(NOT EXISTS "${bin_pkgs_dir}/${pkg}")
-                            message(STATUS "Failed to download host dependency package '${pkg}', aborting.")
-                            return()
-                        endif()
-                    else()
-                        list(APPEND installed_host_deps "${pkg}")
-                    endif()
+                if(EXISTS "${bin_pkgs_dir}/${pkg}")
+                    set(progress_made TRUE)
+                else()
+                    message(STATUS "Failed to download missing dependency '${pkg}', will build from source.")
+                    set(all_ports_found FALSE)
                 endif()
             endforeach()
+
+            if(NOT progress_made)
+                break()
+            endif()
         endwhile()
 
+        # Log any packages that will be skipped due to incomplete dependencies.
+        execute_process(
+            COMMAND ${POWERSHELL}
+                -executionpolicy bypass -noprofile
+                -command "import-module '${CMAKE_BINARY_DIR}/vcpkg-binpkg/vcpkg-binpkg.psm1'; vcpkg-pruneincomplete ."
+            WORKING_DIRECTORY ${bin_pkgs_dir}
+            OUTPUT_VARIABLE incomplete_pkgs
+        )
+        if(incomplete_pkgs)
+            string(STRIP "${incomplete_pkgs}" incomplete_pkgs)
+            message(STATUS "Binary packages: skipping (incomplete dependencies): ${incomplete_pkgs}")
+            set(all_ports_found FALSE)
+        endif()
+
+        # Install packages, skipping any with incomplete dependencies.
         execute_process(
             COMMAND ${POWERSHELL}
                 -executionpolicy bypass -noprofile
@@ -572,37 +613,30 @@ function(get_binary_packages vcpkg_exe)
 
     cleanup_binary_packages()
 
-    set(binary_packages_installed TRUE PARENT_SCOPE)
+    if(all_ports_found)
+        set(binary_packages_installed TRUE PARENT_SCOPE)
+    endif()
 endfunction()
 
-function(vcpkg_remove_optional_deps vcpkg_exe)
-    list(LENGTH VCPKG_DEPS_OPTIONAL optionals_list_len)
-    math(EXPR optionals_list_last "${optionals_list_len} - 1")
-
-    unset(deps)
-
-    foreach(i RANGE 0 ${optionals_list_last} 2)
-        list(GET VCPKG_DEPS_OPTIONAL ${i} dep)
-
-        list(APPEND deps ${dep}:${VCPKG_TARGET_TRIPLET})
-    endforeach()
-
-    execute_process(
-        COMMAND ${vcpkg_exe} remove --recurse ${deps}
-        WORKING_DIRECTORY ${VCPKG_ROOT}
-    )
-endfunction()
 
 function(vcpkg_set_toolchain)
     get_filename_component(preferred_root ${CMAKE_SOURCE_DIR}/../vcpkg ABSOLUTE)
 
-    if(NOT DEFINED POWERSHELL)
+    if(NOT DEFINED VCPKG_BINARY_PACKAGES)
+        set(VCPKG_BINARY_PACKAGES TRUE)
+    endif()
+
+    if(NOT DEFINED VCPKG_SOURCE_PACKAGES)
+        set(VCPKG_SOURCE_PACKAGES TRUE)
+    endif()
+
+    if(NOT DEFINED POWERSHELL AND VCPKG_BINARY_PACKAGES)
         message(FATAL_ERROR "Powershell is required to use vcpkg binaries.")
     endif()
-    if(NOT DEFINED ENV{VCPKG_ROOT})
 
+    if(NOT DEFINED ENV{VCPKG_ROOT})
         if(WIN32)
-            if(DEFINED ENV{CI} OR EXISTS /vcpkg)
+            if(EXISTS /vcpkg)
                 set(VCPKG_ROOT /vcpkg)
             elseif(EXISTS c:/vcpkg)
                 set(VCPKG_ROOT c:/vcpkg)
@@ -659,7 +693,6 @@ function(vcpkg_set_toolchain)
 
         vcpkg_check_git_status(${git_status})
     else()
-        # this is the case when we cache vcpkg/installed with the appveyor build cache
         if(NOT EXISTS ${VCPKG_ROOT}/.git)
             set(git_commands
                 "git init"
@@ -728,87 +761,55 @@ function(vcpkg_set_toolchain)
         endif()
     endif()
 
-    foreach(pkg ${VCPKG_DEPS})
-        list(APPEND VCPKG_DEPS_QUALIFIED ${pkg}:${VCPKG_TARGET_TRIPLET})
-
-        if(VCPKG_TARGET_TRIPLET STREQUAL "x86-mingw-static")
-            list(APPEND VCPKG_DEPS_QUALIFIED libsamplerate:x86-mingw-static)
-        endif()
-    endforeach()
-
     if(WIN32)
-        set(vcpkg_exe "${VCPKG_ROOT}/vcpkg.exe")
+        set(VCPKG_PROGRAM_EXECUTABLE "${VCPKG_ROOT}/vcpkg.exe" CACHE FILEPATH "vcpkg executable" FORCE)
     else()
-        set(vcpkg_exe "${VCPKG_ROOT}/vcpkg")
+        set(VCPKG_PROGRAM_EXECUTABLE "${VCPKG_ROOT}/vcpkg" CACHE FILEPATH "vcpkg executable" FORCE)
     endif()
 
     if (NOT (NO_VCPKG_UPDATES OR (NOT VCPKG_BINARY_PACKAGES)))
-        get_binary_packages(${vcpkg_exe})
+        get_binary_packages()
     endif()
 
-    if(NOT binary_packages_installed)
-        # Get number of seconds since midnight (might be wrong if am/pm is in effect on Windows.)
-        vcpkg_seconds()
-        set(began ${seconds})
-
-        # Limit total installation time to 20 minutes to not overrun CI time limit.
-        math(EXPR time_limit "${began} + (20 * 60)")
-
-        vcpkg_deps_fixup("${vcpkg_exe}")
-
+    if(NOT binary_packages_installed AND (NOT NO_VCPKG_UPDATES) AND VCPKG_SOURCE_PACKAGES)
         # Install core deps.
         execute_process(
-            COMMAND ${vcpkg_exe} --triplet ${VCPKG_TARGET_TRIPLET} install ${pkg}
+            COMMAND ${VCPKG_PROGRAM_EXECUTABLE} --triplet ${VCPKG_TARGET_TRIPLET} install ${VCPKG_DEPS} --allow-unsupported --recurse --keep-going
             WORKING_DIRECTORY ${VCPKG_ROOT}
         )
 
-        # If ports have been updated, and there is time, rebuild cache one at a time to not overrun the CI time limit.
-        vcpkg_seconds()
+        # Upgrade any outdated ports.
+        execute_process(
+            COMMAND ${VCPKG_PROGRAM_EXECUTABLE} upgrade --no-dry-run --allow-unsupported --keep-going
+            WORKING_DIRECTORY ${VCPKG_ROOT}
+        )
 
-        if(seconds LESS time_limit)
-            vcpkg_get_first_upgrade(${vcpkg_exe})
-
-            if(DEFINED first_upgrade)
-                # If we have to upgrade zlib, remove optional deps first so that
-                # the build doesn't overrun the CI time limit.
-                if(first_upgrade STREQUAL "zlib")
-                    vcpkg_remove_optional_deps(${vcpkg_exe})
-                endif()
-
-                execute_process(
-                    COMMAND ${vcpkg_exe} upgrade --no-dry-run "${first_upgrade}:${VCPKG_TARGET_TRIPLET}"
-                    WORKING_DIRECTORY ${VCPKG_ROOT}
-                )
-            endif()
-        endif()
-
-        # Install optional deps, within time limit.
+        # Install optional deps.
         list(LENGTH VCPKG_DEPS_OPTIONAL optionals_list_len)
         math(EXPR optionals_list_last "${optionals_list_len} - 1")
+
+        unset(optional_deps)
 
         foreach(i RANGE 0 ${optionals_list_last} 2)
             list(GET VCPKG_DEPS_OPTIONAL ${i} dep)
 
             math(EXPR var_idx "${i} + 1")
-
             list(GET VCPKG_DEPS_OPTIONAL ${var_idx} var)
-            set(val "${${var}}")
 
-            vcpkg_seconds()
-
-            if("${val}" OR (seconds LESS time_limit AND ("${val}" OR "${val}" STREQUAL "")))
-                set(dep_qualified "${dep}:${VCPKG_TARGET_TRIPLET}")
-
-                execute_process(
-                    COMMAND --triplet ${VCPKG_TARGET_TRIPLET} ${vcpkg_exe} install ${dep}
-                    WORKING_DIRECTORY ${VCPKG_ROOT}
-                )
-
+            if(NOT DEFINED ${var} OR ${var})
+                list(APPEND optional_deps ${dep})
                 set(${var} ON)
             else()
                 set(${var} OFF)
             endif()
         endforeach()
+
+        if(optional_deps)
+            execute_process(
+                COMMAND ${VCPKG_PROGRAM_EXECUTABLE} --triplet ${VCPKG_TARGET_TRIPLET} install ${optional_deps}
+                WORKING_DIRECTORY ${VCPKG_ROOT}
+            )
+        endif()
     endif()
 
     if(WIN32 AND VCPKG_TARGET_TRIPLET MATCHES x64 AND CMAKE_GENERATOR MATCHES "Visual Studio")
@@ -823,9 +824,8 @@ function(vcpkg_set_toolchain)
         endif()
     endif()
 
-    set(CMAKE_TOOLCHAIN_FILE ${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake CACHE FILEPATH "vcpkg toolchain" FORCE)
-
-    set(CMAKE_PREFIX_PATH "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/" CACHE STRING "vcpkg prefix path" FORCE)
+    set(CMAKE_TOOLCHAIN_FILE    "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"        CACHE FILEPATH  "vcpkg toolchain"       FORCE)
+    set(CMAKE_PREFIX_PATH       "${VCPKG_ROOT}/installed/${VCPKG_TARGET_TRIPLET}/"      CACHE STRING    "vcpkg prefix path"     FORCE)
 
     # These may be set in an MSYS2 environment and interfere with finding packages.
     unset(ENV{PKG_CONFIG_PATH})
