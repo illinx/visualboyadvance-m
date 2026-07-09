@@ -85,10 +85,12 @@ static const uint32_t GBP_LOGO_HASH_MODE3 = 0xc13fffd9;
 #endif
 
 // sio local detection: the GBI / sio-local boot screen shows a DIFFERENT
-// bitmap than the Game Boy Player logo.  Placeholder compare value 0 until
-// the real murmur3 hash is captured from the debugger.  A real screen hash is
-// effectively never 0, so sio local never false-triggers until this is filled.
-static const uint32_t SIO_LOCAL_LOGO_HASH = 0x00000000;
+// bitmap than the Game Boy Player logo.  This is the murmur3 hash of vram
+// bytes 0x4000..0x8000 while sio_local_logo.bmp is displayed in mode 4 at
+// 0x06000000 (framebuffer bytes 0x4000..0x8000 of the image), as shown by
+// the AGB-buttontest ROMs.  Computed by AGB-buttontest/tools/bmp2gba.py,
+// which mirrors gbp_murmur3 below.
+static const uint32_t SIO_LOCAL_LOGO_HASH = 0x65C5D598;
 
 // Which handshake, if any, has latched.  GBP rumble and sio local are mutually
 // exclusive: both may be enabled in options, we attempt detection for every
@@ -119,6 +121,7 @@ static uint32_t gbp_transfers_this_frame     = 0;
 #ifdef GBP_SIO_DEBUG
 static uint32_t gbp_vblank_counter           = 0;
 static int      gbp_frames_since_last_irq    = 0;
+extern bool holdState;  // for the per-VBlank CPU-state debug line
 #endif
 
 // MurmurHash3_x86_32 (seed=0, little-endian), ported from mGBA src/util/hash.c
@@ -333,7 +336,11 @@ void GBPUpdate()
         gbp_tx_position = 0;
 #ifdef GBP_SIO_DEBUG
         ++gbp_vblank_counter;
-        fprintf(stderr, "== VBlank %u ==\n", gbp_vblank_counter);
+        fprintf(stderr, "== VBlank %u == PC=%08X arm=%d mode=%02X hold=%d IF=%04X IE=%04X IME=%04X\n",
+                gbp_vblank_counter, reg[15].I, (int)armState, armMode,
+                (int)holdState,
+                READ16LE(&g_ioMem[IO_REG_IF]), READ16LE(&g_ioMem[0x200]),
+                READ16LE(&g_ioMem[0x208]));
 
         // stall watchdog + transfer-rate sampler
         {
@@ -407,6 +414,22 @@ bool GbpHandleSioStart(uint16_t siocnt, int& cpuNextEventRef)
                 // controller, same (field & 0x33) == 0x22 decode as GBP.
                 // Decode and cache all four for future per-pad routing; only
                 // player 1 (index 0) drives the host actuator for now.
+#ifdef GBP_SIO_DEBUG
+                {
+                    bool changed = false;
+                    for (int i = 0; i < 4; ++i)
+                        if (gbp_sio_local_rumble[i] !=
+                            (((rx >> (8 * i)) & 0x33u) == 0x22u))
+                            changed = true;
+                    if (changed)
+                        fprintf(stderr,
+                                "  >> sio local rumble %d%d%d%d (rx=0x%08X) <<\n",
+                                (int)(((rx >> 0) & 0x33u) == 0x22u),
+                                (int)(((rx >> 8) & 0x33u) == 0x22u),
+                                (int)(((rx >> 16) & 0x33u) == 0x22u),
+                                (int)(((rx >> 24) & 0x33u) == 0x22u), rx);
+                }
+#endif
                 for (int i = 0; i < 4; ++i)
                     gbp_sio_local_rumble[i] = (((rx >> (8 * i)) & 0x33u) == 0x22u);
                 GbpRumbleSet(gbp_sio_local_rumble[0]);
