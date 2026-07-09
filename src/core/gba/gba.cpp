@@ -5315,7 +5315,7 @@ void CPULoop(int ticks)
                             CPUCheckDMA(1, 0x0f);
 
 #ifndef NO_LINK
-                            if (coreOptions.gbpEnabled) {
+                            if (coreOptions.gbpEnabled || coreOptions.sioLocalEnabled) {
                                 GBPUpdate();
                             }
 #endif

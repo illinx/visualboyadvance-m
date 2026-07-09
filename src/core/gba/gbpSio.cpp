@@ -84,11 +84,33 @@ static const uint32_t GBP_LOGO_HASH = 0xE6BC5CD1;
 static const uint32_t GBP_LOGO_HASH_MODE3 = 0xc13fffd9;
 #endif
 
-static bool gbp_active        = false;
+// sio local detection: the GBI / sio-local boot screen shows a DIFFERENT
+// bitmap than the Game Boy Player logo.  Placeholder compare value 0 until
+// the real murmur3 hash is captured from the debugger.  A real screen hash is
+// effectively never 0, so sio local never false-triggers until this is filled.
+static const uint32_t SIO_LOCAL_LOGO_HASH = 0x00000000;
+
+// Which handshake, if any, has latched.  GBP rumble and sio local are mutually
+// exclusive: both may be enabled in options, we attempt detection for every
+// enabled protocol while none is locked, and the first bitmap match latches —
+// after which the other is never tried until teardown/reset.
+enum GbpProtocol {
+    kProtoNone = 0,   // no handshake locked yet
+    kProtoGbpRumble,  // Game Boy Player rumble (existing behavior)
+    kProtoSioLocal,   // sio local 4-controller input + rumble
+};
+
+static bool        gbp_active        = false;
+static GbpProtocol gbp_protocol      = kProtoNone;
 static int  gbp_tx_position   = 0;
 static int  gbp_transfer_end  = 0;  // countdown in CPU ticks until transfer done
 static bool gbp_rumble_state  = false;
 static int  gbp_inputs_posted = 0;  // cycles 0→1→2→0 each VBlank; at 2 we fake directions pressed
+
+// sio local: latest per-controller rumble decoded from the game's rx word.
+// All four are cached for future per-pad host-rumble routing, but for now only
+// player 1 (index 0) drives the host actuator via systemCartridgeRumble.
+static bool gbp_sio_local_rumble[4] = { false, false, false, false };
 
 
 static uint32_t gbp_transfers_this_frame     = 0;
@@ -158,8 +180,8 @@ static void GbpRumbleSet(bool enable)
 #endif
 }
 
-// is the gba currently displaying the gbp logo?
-static bool CheckGBPScreen()
+// is the gba currently displaying the gbp (rumble) logo?
+static bool CheckGbpRumbleScreen()
 {
     if (!g_paletteRAM || !g_vram)
         return false;
@@ -176,12 +198,83 @@ static bool CheckGBPScreen()
     return gbp_murmur3(&g_vram[0x4000], 0x4000) == GBP_LOGO_HASH;
 }
 
+// is the gba currently displaying the sio local boot bitmap?  Uses a distinct
+// hash from the GBP logo.  No palette gate for now — the real palette/hash come
+// from the debugger; the placeholder hash of 0 keeps this from ever matching.
+static bool CheckSioLocalScreen()
+{
+    if (!g_vram)
+        return false;
+    return gbp_murmur3(&g_vram[0x4000], 0x4000) == SIO_LOCAL_LOGO_HASH;
+}
+
+// Is the boot bitmap for the given (already-locked) protocol on screen now?
+static bool ProtocolScreenPresent(GbpProtocol proto)
+{
+    switch (proto) {
+    case kProtoGbpRumble: return CheckGbpRumbleScreen();
+    case kProtoSioLocal:  return CheckSioLocalScreen();
+    default:              return false;
+    }
+}
+
+// While no protocol is locked, attempt detection for every enabled protocol.
+// The first bitmap match wins; the caller latches it and stops trying the other.
+static GbpProtocol DetectProtocol()
+{
+    if (coreOptions.gbpEnabled && CheckGbpRumbleScreen())
+        return kProtoGbpRumble;
+    if (coreOptions.sioLocalEnabled && CheckSioLocalScreen())
+        return kProtoSioLocal;
+    return kProtoNone;
+}
+
+// Is the option backing the currently-locked protocol still enabled?
+static bool GbpProtocolEnabled()
+{
+    switch (gbp_protocol) {
+    case kProtoGbpRumble: return coreOptions.gbpEnabled != 0;
+    case kProtoSioLocal:  return coreOptions.sioLocalEnabled != 0;
+    default:              return false;
+    }
+}
+
+// Build a sio local inbound controller word for controller `index` (0-3).
+// Wire spec v1 shape (bit0 = LSB):
+//   bits 0-3   0x3 marker
+//   bits 4-13  KEYINPUT (GBA format, 0 = pressed)
+//   bit  14    connected
+//   bits 15-16 controller_index
+//   bits 17-27 reserved (0)
+//   bits 28-31 0x3 marker
+// e.g. connected idle c0 = 0x30007FF3, disconnected c0 = 0x30003FF3.
+static uint32_t SioLocalBuildWord(int index)
+{
+    // TODO: real per-pad presence detection (a frontend concern).  For now all
+    // four controllers report connected; a disconnected pad would emit
+    // connected = 0 with KEYINPUT = 0x3FF (all released) as the fail-safe.
+    const bool connected = true;
+
+    uint16_t keyinput = 0x3FF;  // fail-safe default: all released
+    if (connected) {
+        uint32_t joy = systemReadJoypad(index);
+        keyinput = (uint16_t)(0x3FFu ^ (joy & 0x3FFu));  // GBA KEYINPUT: 0 = pressed
+    }
+
+    uint32_t word = 0x30000003u;                        // both 0x3 markers
+    word |= (uint32_t)(keyinput & 0x3FFu) << 4;         // KEYINPUT
+    word |= (uint32_t)(connected ? 1u : 0u) << 14;      // connected
+    word |= (uint32_t)(index & 0x3) << 15;              // controller_index
+    return word;
+}
+
 void GBPUpdate()
 {
     // real gbp doesn't use the internal link if anything is connected to the external serial
     if (GetLinkMode() != LINK_DISCONNECTED) {
         if (gbp_active) {
             gbp_active        = false;
+            gbp_protocol      = kProtoNone;
             gbp_transfer_end  = 0;
             gbp_inputs_posted = 0;
             GbpRumbleSet(false);
@@ -191,35 +284,51 @@ void GBPUpdate()
         return;
     }
 
-    if (CheckGBPScreen()) {
-        if (!gbp_active) {
+    // Detection + locking.  While nothing is latched, attempt every enabled
+    // protocol's handshake; the first bitmap match latches gbp_protocol and we
+    // stop trying the other.  Once latched, the protocol persists (through the
+    // logo disappearing into gameplay) until external-link/reset teardown.
+    bool logo_present;
+    if (gbp_active) {
+        logo_present = ProtocolScreenPresent(gbp_protocol);
+    } else {
+        GbpProtocol detected = DetectProtocol();
+        logo_present = (detected != kProtoNone);
+        if (logo_present) {
 #ifdef GBP_SIO_DEBUG
             uint16_t dispcnt = READ16LE(&g_ioMem[IO_REG_DISPCNT]);
             fprintf(stderr,
-                    "  >> GBP active=true (DISPCNT mode=%d) <<\n",
-                    dispcnt & 0x7);
+                    "  >> GBP active=true protocol=%d (DISPCNT mode=%d) <<\n",
+                    (int)detected, dispcnt & 0x7);
 #endif
             gbp_active        = true;
+            gbp_protocol      = detected;
             gbp_tx_position   = 0;
             gbp_inputs_posted = 0;
         }
-
-        gbp_inputs_posted = (gbp_inputs_posted + 1) % 3; //0 → 1 → 2 → 0
-        if (gbp_inputs_posted == 2) {
-            // clear bits 4-7 (Right/Left/Up/Down) = all pressed.
-            P1 = P1 & ~0x00F0u;
-        } else {
-            P1 = 0x03FF;  //nothing pressed
-        }
-        UPDATE_REG(IO_REG_KEYINPUT, P1);
-    } else if (gbp_inputs_posted != 0) {
-        // logo gone
-        gbp_inputs_posted = 0;
-        P1 = 0x03FF;
-        UPDATE_REG(IO_REG_KEYINPUT, P1);
     }
 
-    // 12 step nintendo handshake then rumble data rx
+    // GBP rumble boot logo: fake D-pad presses to advance the intro.  sio local
+    // delivers all controller input over SIO, so it never pokes P1/KEYINPUT.
+    if (gbp_protocol == kProtoGbpRumble) {
+        if (logo_present) {
+            gbp_inputs_posted = (gbp_inputs_posted + 1) % 3; //0 → 1 → 2 → 0
+            if (gbp_inputs_posted == 2) {
+                // clear bits 4-7 (Right/Left/Up/Down) = all pressed.
+                P1 = P1 & ~0x00F0u;
+            } else {
+                P1 = 0x03FF;  //nothing pressed
+            }
+            UPDATE_REG(IO_REG_KEYINPUT, P1);
+        } else if (gbp_inputs_posted != 0) {
+            // logo gone
+            gbp_inputs_posted = 0;
+            P1 = 0x03FF;
+            UPDATE_REG(IO_REG_KEYINPUT, P1);
+        }
+    }
+
+    // 12 step nintendo handshake then per-protocol data rx/tx each VBlank
     if (gbp_active) {
         gbp_tx_position = 0;
 #ifdef GBP_SIO_DEBUG
@@ -258,7 +367,7 @@ bool GBPIsActive()
 bool GbpWillHandleSio()
 {
     //same logic as GbpHandleSioStart
-    return gbp_active && coreOptions.gbpEnabled;
+    return gbp_active && GbpProtocolEnabled();
 }
 
 int GBPTransferEnd()
@@ -268,7 +377,7 @@ int GBPTransferEnd()
 
 bool GbpHandleSioStart(uint16_t siocnt, int& cpuNextEventRef)
 {
-    if (!gbp_active || !coreOptions.gbpEnabled)
+    if (!gbp_active || !GbpProtocolEnabled())
         return false;
 
     // NORMAL_32 mode test, equivalent to GetSIOMode() == NORMAL32 in gbaLink.cpp:
@@ -293,10 +402,20 @@ bool GbpHandleSioStart(uint16_t siocnt, int& cpuNextEventRef)
         }
 #endif
         if (gbp_tx_position >= 12) {
-            // 0x22 in bits [1:0] and [5:4] = rumble on; 0x00/0x11 = off.
-            // matches mGBA 0.10.5
-            // (src/gba/sio/gbp.c _gbpSioWriteRegister)
-            GbpRumbleSet((rx & 0x33u) == 0x22u);
+            if (gbp_protocol == kProtoSioLocal) {
+                // sio local rumble: 4 replicated nibble-fields, one per
+                // controller, same (field & 0x33) == 0x22 decode as GBP.
+                // Decode and cache all four for future per-pad routing; only
+                // player 1 (index 0) drives the host actuator for now.
+                for (int i = 0; i < 4; ++i)
+                    gbp_sio_local_rumble[i] = (((rx >> (8 * i)) & 0x33u) == 0x22u);
+                GbpRumbleSet(gbp_sio_local_rumble[0]);
+            } else {
+                // 0x22 in bits [1:0] and [5:4] = rumble on; 0x00/0x11 = off.
+                // matches mGBA 0.10.5
+                // (src/gba/sio/gbp.c _gbpSioWriteRegister)
+                GbpRumbleSet((rx & 0x33u) == 0x22u);
+            }
         }
 
         // match mGBA's 2048 cycles
@@ -334,6 +453,11 @@ void GbpLinkUpdateTick(int ticks)
                 pos = kGbpTransfersPerFrame - 1;
             }
             uint32_t tx = gbp_tx_data[pos];
+            if (gbp_protocol == kProtoSioLocal && pos >= 13) {
+                // Post-handshake, the four padding slots 13-16 carry the sio
+                // local 4-controller input cycle: one controller word per slot.
+                tx = SioLocalBuildWord(pos - 13);
+            }
 #ifdef GBP_SIO_DEBUG
             {
                 uint32_t rx_at_fire = READ32LE(&g_ioMem[COMM_SIODATA32_L]);
@@ -368,8 +492,11 @@ void GbpLinkUpdateTick(int ticks)
 void GbpReset()
 {
     gbp_active        = false;
+    gbp_protocol      = kProtoNone;
     gbp_tx_position   = 0;
     gbp_transfer_end  = 0;
     gbp_inputs_posted = 0;
+    for (int i = 0; i < 4; ++i)
+        gbp_sio_local_rumble[i] = false;
     GbpRumbleSet(false);
 }

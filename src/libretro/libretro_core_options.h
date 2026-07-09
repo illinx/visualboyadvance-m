@@ -442,6 +442,20 @@ struct retro_core_option_v2_definition option_defs_us[] = {
         "enabled"
     },
     {
+        "vbam_siolocalenabled",
+        "Enable SIO Local Multiplayer",
+        NULL,
+        "Enable SIO Local 4-controller multiplayer + rumble emulation over the Game Boy Player SIO link.",
+        NULL,
+        "system",
+        {
+            { "disabled", NULL },
+            { "enabled",  NULL },
+            { NULL, NULL },
+        },
+        "disabled"
+    },
+    {
         "vbam_astick_deadzone",
         "Sensors Deadzone (%)",
         NULL,

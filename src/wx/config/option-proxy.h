@@ -114,6 +114,7 @@ static constexpr std::array<Option::Type, kNbOptions> kOptionsTypes = {
     /*kPrefUseBiosGBC*/ Option::Type::kBool,
     /*kPrefVsync*/ Option::Type::kBool,
     /*kPrefGBPEnabled*/ Option::Type::kInt,
+    /*kPrefSioLocalEnabled*/ Option::Type::kInt,
 
     /// Geometry
     /*kGeomFullScreen*/ Option::Type::kBool,

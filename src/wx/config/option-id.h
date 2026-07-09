@@ -110,6 +110,7 @@ enum class OptionID {
     kPrefUseBiosGBC,
     kPrefVsync,
     kPrefGBPEnabled,
+    kPrefSioLocalEnabled,
 
     /// Geometry
     kGeomFullScreen,

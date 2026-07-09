@@ -2668,6 +2668,11 @@ EVT_HANDLER_MASK(GBPEnabled, "Enable Game Boy Player", CMDEN_GBA)
     GetMenuOptionConfig("GBPEnabled", config::OptionID::kPrefGBPEnabled);
 }
 
+EVT_HANDLER_MASK(SioLocalEnabled, "Enable SIO Local multiplayer", CMDEN_GBA)
+{
+    GetMenuOptionConfig("SioLocalEnabled", config::OptionID::kPrefSioLocalEnabled);
+}
+
 EVT_HANDLER_MASK(GBLcdFilter, "Enable LCD filter", CMDEN_GB)
 {
     GetMenuOptionConfig("GBLcdFilter", config::OptionID::kGBLCDFilter);

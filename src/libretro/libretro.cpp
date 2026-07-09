@@ -1456,12 +1456,19 @@ static void update_variables_gba() {
         coreOptions.gbpEnabled = !strcmp(var.value, "enabled");
     }
 
-    char options[5][35] = {
+    var.key = "vbam_siolocalenabled";
+    var.value = NULL;
+    if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value) {
+        coreOptions.sioLocalEnabled = !strcmp(var.value, "enabled");
+    }
+
+    char options[6][35] = {
         "vbam_soundinterpolation",
         "vbam_soundfiltering",
         "vbam_forceRTCenable",
         "vbam_solarsensor",
-        "vbam_gbpenabled"
+        "vbam_gbpenabled",
+        "vbam_siolocalenabled"
     };
 
     struct retro_core_option_display option_display_gba;

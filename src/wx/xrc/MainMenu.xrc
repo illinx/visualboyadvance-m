@@ -510,6 +510,10 @@
           <label>Enable Game _Boy Player</label>
           <checkable>1</checkable>
         </object>
+        <object class="wxMenuItem" name="SioLocalEnabled">
+          <label>Enable _SIO Local Multiplayer</label>
+          <checkable>1</checkable>
+        </object>
       </object>
       <object class="wxMenu">
         <label translate="0">_Game Boy</label>

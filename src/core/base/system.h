@@ -77,6 +77,7 @@ extern struct CoreOptions {
     int useBios = 0;
     int gbPrinterEnabled = 0;
     int gbpEnabled = 1;
+    int sioLocalEnabled = 0;
     uint32_t speedup_throttle = 100;
     uint32_t speedup_frame_skip = 9;
     uint32_t throttle = 100;

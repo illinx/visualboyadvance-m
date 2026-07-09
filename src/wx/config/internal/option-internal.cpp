@@ -390,6 +390,7 @@ std::array<Option, kNbOptions>& Option::All() {
         Option(OptionID::kPrefUseBiosGBC, &g_owned_opts.use_bios_file_gbc),
         Option(OptionID::kPrefVsync, &g_owned_opts.vsync),
         Option(OptionID::kPrefGBPEnabled, &coreOptions.gbpEnabled, 0, 1),
+        Option(OptionID::kPrefSioLocalEnabled, &coreOptions.sioLocalEnabled, 0, 1),
 
         /// Geometry
         Option(OptionID::kGeomFullScreen, &g_owned_opts.fullscreen),
@@ -600,6 +601,7 @@ const std::array<OptionData, kNbOptions + 1> kAllOptionsData = {
                _("Use the specified BIOS file for Game Boy Color")},
     OptionData{"preferences/vsync", "VSync", _("Wait for vertical sync")},
     OptionData{"preferences/gbpEnabled", "GBPEnabled", _("Enable Game Boy Player")},
+    OptionData{"preferences/sioLocalEnabled", "SioLocalEnabled", _("Enable SIO Local multiplayer")},
 
     /// Geometry
     OptionData{"geometry/fullScreen", "Fullscreen", _("Enter fullscreen mode at startup")},

@@ -200,6 +200,7 @@ struct option argOptions[] = {
 	{ "gb-palette-option", required_argument, 0, OPT_GB_PALETTE_OPTION },
 	{ "gb-printer", no_argument, &coreOptions.gbPrinterEnabled, 1 },
 	{ "gbp", no_argument, &coreOptions.gbpEnabled, 1 },
+	{ "sio-local", no_argument, &coreOptions.sioLocalEnabled, 1 },
 	{ "gdb", required_argument, 0, 'G' },
 	{ "help", no_argument, &optPrintUsage, 1 },
 	{ "ifb-filter", required_argument, 0, 'I' },
@@ -366,6 +367,7 @@ void LoadConfig()
 	coreOptions.useBios = ReadPrefHex("useBiosGBA");
 	coreOptions.gbPrinterEnabled = ReadPref("gbPrinter", 0);
 	coreOptions.gbpEnabled = ReadPref("gbpEnabled", 1);
+	coreOptions.sioLocalEnabled = ReadPref("sioLocalEnabled", 0);
 
 	int soundQuality = (ReadPrefHex("soundQuality", 1));
 	switch (soundQuality) {
