@@ -207,7 +207,13 @@ static inline bool IsGPIO(uint32_t address) {
 
 // used for ROM boundary check
 static inline bool IsEEPROM(uint32_t address) {
-    return (cpuEEPROMEnabled && (address & eepromMask) == eepromMask);
+    // eepromMask is 0 until the game's first EEPROM DMA calls
+    // eepromSetSize(); (address & 0) == 0 would otherwise match EVERY
+    // ROM address and turn all ROM data reads into EEPROM stub reads,
+    // deadlocking EEPROM games at boot (first seen with River City
+    // Ransom EX, whose crt0 pool loads all returned 0).
+    return (cpuEEPROMEnabled && eepromMask != 0 &&
+            (address & eepromMask) == eepromMask);
 }
 
 static inline bool isSaveGame() {
