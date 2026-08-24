@@ -91,7 +91,7 @@ if(GIT_FOUND AND WIN32)
 
     if(NOT EXISTS "${CMAKE_SOURCE_DIR}/win32-deps/mingw-xaudio/include")
         if(NOT (SUBMODULE_MANUAL_UPDATE AND SUBMODULE_UPDATE_STATUS EQUAL 0))
-            message(FATAL_ERROR "Please pull in git submodules, e.g.\nrun: git submodule update --init --remote --recursive")
+            message(FATAL_ERROR "Please pull in git submodules, e.g.\nrun: git submodule update --init --recursive")
         endif()
     endif()
 endif()

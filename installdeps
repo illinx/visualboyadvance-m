@@ -421,7 +421,7 @@ debian_installdeps() {
         fi
 
         # get the necessary win32 headers
-        git submodule update --init --remote --recursive
+        git submodule update --init --recursive
     fi
 
     build_instructions
@@ -595,7 +595,7 @@ fedora_installdeps() {
         done
 
         # get the necessary win32 headers
-        git submodule update --init --remote --recursive
+        git submodule update --init --recursive
     fi
 
     [ -z "$rpms_installed" ] && check sudo dnf -y --nogpgcheck --best --allowerasing install "$@"
@@ -771,7 +771,7 @@ rhel_installdeps() {
         done
 
         # get the necessary win32 headers
-        git submodule update --init --remote --recursive
+        git submodule update --init --recursive
     fi
 
     [ -z "$rpms_installed" ] && check sudo yum -y install "$@"
@@ -968,7 +968,7 @@ EOF
         [ $# -gt 0 ] && check $pacman --noconfirm --needed -S "$@"
 
         # get the necessary win32 headers
-        git submodule update --init --remote --recursive
+        git submodule update --init --recursive
     fi
 
     build_instructions
@@ -1136,7 +1136,7 @@ windows_installdeps() {
     check pacman --noconfirm --needed -S git make zip "$@"
 
     # get the necessary win32 headers
-    check git submodule update --init --remote --recursive
+    check git submodule update --init --recursive
 
     if [ "$MSYSTEM" = MSYS ]; then
         case "$target" in
