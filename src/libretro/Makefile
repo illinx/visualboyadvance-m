@@ -560,7 +560,13 @@ else
 	TARGET := $(TARGET_NAME)_libretro.dll
 	CC ?= gcc
 	CXX ?= g++
-	SHARED := -shared -static-libgcc -static-libstdc++ -Wl,-no-undefined -Wl,-version-script=$(LIBRETRO_DIR)/link.T
+	SHARED := -shared -static-libgcc -static-libstdc++ -Wl,-no-undefined
+	# Version scripts are an ELF feature. GNU ld accepts the flag when targeting
+	# PE, but lld -- the default linker of the MSYS2 CLANG64 toolchain -- rejects
+	# it as an unknown argument, so only pass it when linking with GNU ld.
+	ifeq (0,$(shell $(CXX) --version 2>/dev/null | grep -ci clang))
+		SHARED += -Wl,-version-script=$(LIBRETRO_DIR)/link.T
+	endif
 	TILED_RENDERING=1
 	FRONTEND_SUPPORTS_RGB565=0
 endif
