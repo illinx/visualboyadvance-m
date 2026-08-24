@@ -19,6 +19,7 @@ if(X86_64 OR ARM64)
 
     target_include_directories(vbam-rpi-proxy PUBLIC
         ${CMAKE_SOURCE_DIR}/src
+        ${wxWidgets_INCLUDE_DIRS}
     )
 
     target_link_libraries(vbam-rpi-proxy
