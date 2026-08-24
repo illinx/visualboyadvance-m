@@ -92,10 +92,9 @@ static const uint32_t GBP_LOGO_HASH_MODE3 = 0xc13fffd9;
 // which mirrors gbp_murmur3 below.
 static const uint32_t SIO_LOCAL_LOGO_HASH = 0x65C5D598;
 
-// Which handshake, if any, has latched.  GBP rumble and sio local are mutually
+// Which handshake, if any, is active.  GBP rumble and sio local are mutually
 // exclusive: both may be enabled in options, we attempt detection for every
-// enabled protocol while none is locked, and the first bitmap match latches —
-// after which the other is never tried until teardown/reset.
+// enabled protocol while none is locked, and pick the first one that is detected
 enum GbpProtocol {
     kProtoNone = 0,   // no handshake locked yet
     kProtoGbpRumble,  // Game Boy Player rumble (existing behavior)
@@ -201,9 +200,7 @@ static bool CheckGbpRumbleScreen()
     return gbp_murmur3(&g_vram[0x4000], 0x4000) == GBP_LOGO_HASH;
 }
 
-// is the gba currently displaying the sio local boot bitmap?  Uses a distinct
-// hash from the GBP logo.  No palette gate for now — the real palette/hash come
-// from the debugger; the placeholder hash of 0 keeps this from ever matching.
+// is the gba currently displaying the sio local boot bitmap? 
 static bool CheckSioLocalScreen()
 {
     if (!g_vram)
@@ -221,8 +218,8 @@ static bool ProtocolScreenPresent(GbpProtocol proto)
     }
 }
 
-// While no protocol is locked, attempt detection for every enabled protocol.
-// The first bitmap match wins; the caller latches it and stops trying the other.
+// While no protocol is active, attempt detection for every enabled protocol.
+// first match wins
 static GbpProtocol DetectProtocol()
 {
     if (coreOptions.gbpEnabled && CheckGbpRumbleScreen())
@@ -232,7 +229,7 @@ static GbpProtocol DetectProtocol()
     return kProtoNone;
 }
 
-// Is the option backing the currently-locked protocol still enabled?
+// Is the option for the currently-activee protocol still enabled?
 static bool GbpProtocolEnabled()
 {
     switch (gbp_protocol) {
@@ -243,7 +240,7 @@ static bool GbpProtocolEnabled()
 }
 
 // Build a sio local inbound controller word for controller `index` (0-3).
-// Wire spec v1 shape (bit0 = LSB):
+// Wire spec v1:
 //   bits 0-3   0x3 marker
 //   bits 4-13  KEYINPUT (GBA format, 0 = pressed)
 //   bit  14    connected
@@ -253,9 +250,8 @@ static bool GbpProtocolEnabled()
 // e.g. connected idle c0 = 0x30007FF3, disconnected c0 = 0x30003FF3.
 static uint32_t SioLocalBuildWord(int index)
 {
-    // TODO: real per-pad presence detection (a frontend concern).  For now all
-    // four controllers report connected; a disconnected pad would emit
-    // connected = 0 with KEYINPUT = 0x3FF (all released) as the fail-safe.
+    // TODO: detect if pads are connected from the frontend.  
+    // For now all four controllers report connected
     const bool connected = true;
 
     uint16_t keyinput = 0x3FF;  // fail-safe default: all released
@@ -287,10 +283,7 @@ void GBPUpdate()
         return;
     }
 
-    // Detection + locking.  While nothing is latched, attempt every enabled
-    // protocol's handshake; the first bitmap match latches gbp_protocol and we
-    // stop trying the other.  Once latched, the protocol persists (through the
-    // logo disappearing into gameplay) until external-link/reset teardown.
+    //detect which sio protocol to use
     bool logo_present;
     if (gbp_active) {
         logo_present = ProtocolScreenPresent(gbp_protocol);
@@ -412,8 +405,8 @@ bool GbpHandleSioStart(uint16_t siocnt, int& cpuNextEventRef)
             if (gbp_protocol == kProtoSioLocal) {
                 // sio local rumble: 4 replicated nibble-fields, one per
                 // controller, same (field & 0x33) == 0x22 decode as GBP.
-                // Decode and cache all four for future per-pad routing; only
-                // player 1 (index 0) drives the host actuator for now.
+                // Right now vbam only supports rumble for player 1,
+                // but cache it now for when it's supported
 #ifdef GBP_SIO_DEBUG
                 {
                     bool changed = false;

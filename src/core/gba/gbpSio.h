@@ -31,10 +31,6 @@ extern int GBPTransferEnd();
  * intercepts NORMAL_32 SIO transfers, decodes rumble commands from the data
  * the game sends, anchors the transfer deadline, and clips cpuNextEvent to it.
  *
- * The cpuNextEvent reference parameter is load-bearing: the deadline anchor
- * and the cpuNextEvent clip must remain atomic with one another.  See the
- * comment block inside the implementation for the full rationale.
- *
  * @param siocnt          The value of SIOCNT being written
  * @param cpuNextEventRef Reference to the CPU event scheduler's deadline
  * @return true if GBP consumed the transfer.  When true, the caller must
@@ -49,9 +45,6 @@ extern bool GbpHandleSioStart(uint16_t siocnt, int& cpuNextEventRef);
  * enabled.  Used by the CPU's SIOCNT-write handler to suppress the generic
  * cycle-accurate SIO completion path (kSchedSio), which would otherwise
  * double-handle the transfer and clobber the GBP handshake response.
- *
- * Unlike GBPIsActive() (which is true only while a transfer is in flight),
- * this reflects whether GBP owns the transfer at the START edge.
  */
 extern bool GbpWillHandleSio();
 
