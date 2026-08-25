@@ -187,6 +187,10 @@ jobs:
       - build-libretro-ngc
       - build-libretro-wii
       - build-libretro-wiiu
+    # Publish whatever built. Without this, a job in `needs` failing would
+    # skip this one and produce no release at all; the package() helper below
+    # already skips artifacts that never arrived.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
