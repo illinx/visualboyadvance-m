@@ -29,6 +29,12 @@ if(X86_64 OR ARM64)
 
     target_compile_definitions(vbam-rpi-proxy PRIVATE
         ${wxWidgets_DEFINITIONS}
+        # The sources call the W variants of the Win32 API explicitly and wx is
+        # built in unicode mode, so UNICODE must be set for macros like
+        # RT_RCDATA and for wx/msw/private.h. cmake/Toolchain-msvc.cmake defines
+        # these globally for MSVC; nothing does for the MinGW/clang toolchains.
+        UNICODE
+        _UNICODE
     )
 
     # Directory where the 32-bit host will be built/found

@@ -3,6 +3,10 @@
 
 #if defined(_WIN32)
 
+// winsock2.h must precede windows.h: wx/msw/wrapwin.h pulls in winsock2.h
+// later, which warns if windows.h was seen first, and -Werror makes that fatal.
+// Same ordering as src/wx/wxhead.h.
+#include <winsock2.h>
 #include <windows.h>
 #include <wx/string.h>
 #include <cstdint>
