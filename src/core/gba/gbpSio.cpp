@@ -90,7 +90,7 @@ static const uint32_t GBP_LOGO_HASH_MODE3 = 0xc13fffd9;
 // 0x06000000 (framebuffer bytes 0x4000..0x8000 of the image), as shown by
 // the AGB-buttontest ROMs.  Computed by AGB-buttontest/tools/bmp2gba.py,
 // which mirrors gbp_murmur3 below.
-static const uint32_t SIO_LOCAL_LOGO_HASH = 0x65C5D598;
+static const uint32_t SIO_LOCAL_LOGO_HASH = 0xBA697780;
 
 // Which handshake, if any, is active.  GBP rumble and sio local are mutually
 // exclusive: both may be enabled in options, we attempt detection for every
